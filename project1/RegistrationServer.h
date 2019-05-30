@@ -2,10 +2,14 @@
 #define RegistrationServer_h
 
 #include <vector>
-#include <string>
+//#include <string>
 #include <ctime>
 #include <sys/socket.h>
 #include <netinet/in.h>
+#include <unistd.h>
+//#include <stdio.h>
+#include <iostream>
+#include <string.h>
 #define PORT 65423
 /*
 time_t now = time(0);
@@ -13,7 +17,7 @@ char* dt = ctime(&now);
 */
 
 struct PeerDetails {
-    std::string host_name;
+    char* host_name;
     int cookie;
     bool is_active;
     int ttl;

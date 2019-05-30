@@ -2,12 +2,19 @@
 #define Peer_h
 
 #include <vector>
-#include <string>
+//#include <string>
+#include <string.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <iostream>
+#include <arpa/inet.h>
+#include <unistd.h>
+#define RS_PORT 65423
 
 struct RFC_Record {
     int rfc_num;
-    std::string title;
-    std::string host_name;
+    char* title;
+    char* host_name;
     int ttl;
 };
 
@@ -35,6 +42,7 @@ class Peer {
                 void pquery();
                 void keep_alive();
         };
+        Peer::RFC_Client rfc_client;
 };
 
 #endif /* RegistrationServer_h */
