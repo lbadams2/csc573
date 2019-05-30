@@ -2,10 +2,14 @@
 
 Peer::Peer() {
     this->rfc_client = RFC_Client();
+    std::cout << "constructed peer client";
+    std::cout.flush();
 }
 
 Peer::RFC_Client::RFC_Client() {
     RFC_Client::start();
+    std::cout << "executed peer start function";
+    std::cout.flush();
 }
 
 void Peer::RFC_Client::start() {
@@ -36,7 +40,8 @@ void Peer::RFC_Client::start() {
     }
 
     send(sock, hello, strlen(hello), 0);
-    std::cout << "Hello message sent\n";
+    //std::cout << "Hello message sent from client\n";
     valread = read(sock, buffer, 1024);
-    printf("%s\n", buffer);
+    printf("print client buffer %s\n", buffer);
+    close(sock);
 }

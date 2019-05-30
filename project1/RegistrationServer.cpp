@@ -21,6 +21,7 @@ void RegistrationServer::start() {
     std::cout << "opened socket\n";
     //std::cout.flush();
 
+    // set socket to accept multiple connections
     if(setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt))) {
         perror("rs setsockopt");
         exit(EXIT_FAILURE);
@@ -32,6 +33,7 @@ void RegistrationServer::start() {
     address.sin_addr.s_addr = INADDR_ANY;
     address.sin_port = htons(PORT);
 
+    // bind socket to port
     if(bind(server_fd, (struct sockaddr *) &address, sizeof(address)) < 0) {
         perror("bind failed");
         exit(EXIT_FAILURE);
@@ -56,7 +58,7 @@ void RegistrationServer::start() {
 
     // from unistd.h
     valread = read(new_socket, buffer, 1024);
-    printf("%s\n", buffer);
+    printf("print server buffer: %s\n", buffer);
     send(new_socket, hello, strlen(hello), 0);
-    printf("Hello message sent\n");
+    //printf("Hello message sent from server\n");
 }
