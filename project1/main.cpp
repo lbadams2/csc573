@@ -7,42 +7,39 @@
 #include <unistd.h>
 #include <string.h>
 #include <arpa/inet.h>
-#define PORT 65423
 //using namespace std;
+
+void test_task() {
+    Peer::move_rfc_files("test");
+    Peer *a = new Peer("peer_a");
+    Peer::RFC_Client &a_client = a->get_rfc_client();
+    Peer::RFC_Server &a_server = a->get_rfc_server();
+    Peer *b = new Peer("peer_b");
+    Peer::RFC_Client &b_client = b->get_rfc_client();
+    Peer::RFC_Server &b_server = b->get_rfc_server();
+    std::string str("none");
+    std::thread th_a(&Peer::RFC_Client::request, a_client, "Register", str);
+    std::thread th_b(&Peer::RFC_Client::request, b_client, "Register", str);
+
+
+    std::thread stop_th(&Peer::RFC_Client::request, a_client, "Stop", str);
+    th_a.join();
+    th_b.join();
+
+    delete a;
+    delete b;
+    
+}
 
 // /Users/liam_adams/my_repos/csc573/project1/rfc_files/rfc8598.txt
 int main() {
-    std::cout << "entered main\n";
-    
+    std::cout << "entered main\n";    
     RegistrationServer *rs = new RegistrationServer();
     std::thread rs_thread(&RegistrationServer::start_server, rs);
     std::cout << "rs thread running\n";
-     
-    //RegistrationServer rs;
-    //rs.run_thread();
-    
-    /*
-    Peer *a = new Peer("a.ncsu.edu");
-    Peer::RFC_Client a_client = a->get_rfc_client();
-    std::thread th(&Peer::RFC_Client::request, a_client, "Register");
-    */
-    
-    
-    Peer *stop = new Peer("stop.ncsu.edu");
-    Peer::RFC_Client stop_client = stop->get_rfc_client();
-    std::thread stop_th(&Peer::RFC_Client::request, stop_client, "Stop");
-    std::cout << "joining stop thread\n";
-    stop_th.join();
-    std::cout << "stop thread joined\n";
+    test_task();
+
     rs_thread.join();
-    delete rs;
-    delete stop;
-    /*
-    delete a;
-    
-    Peer b = Peer("b.ncsu.edu");
-    Peer::RFC_Client b_client = b.get_rfc_client();
-    b_client.request("Register");
-     */
+    delete rs;    
     return 0;
 }

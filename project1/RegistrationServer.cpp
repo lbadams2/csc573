@@ -114,7 +114,9 @@ void RegistrationServer::start_server() {
                 std::cout << "rs about to break\n";
                 break;
             }
-            
+            else if(req_map["type"] == "PQUERY") {
+                response_str = pquery(req_map);
+            }
             const char* c_res_str = response_str.c_str();
             send(new_socket, c_res_str, strlen(c_res_str), 0);
             // read incoming message
@@ -128,10 +130,38 @@ void RegistrationServer::start_server() {
     //printf("Hello message sent from server\n");
 }
 
+std::string PeerDetails::to_string() const {
+    std::string str = "host:" + host_name + " port:" + std::to_string(port) + " peer_name:" + peer_name;
+}
+
+std::string RegistrationServer::leave(std::unordered_map<std::string, std::string> &request) {
+
+}
+
+std::string RegistrationServer::keep_alive(std::unordered_map<std::string, std::string> &request) {
+    
+}
+
+std::string RegistrationServer::pquery(std::unordered_map<std::string, std::string> &request) {
+    std::string thehost = request["HOST"];
+    time_t now = time(0);
+    auto it = find_if(peer_list.begin(), peer_list.end(), [&thehost](const PeerDetails& p){return p.host_name == thehost;});
+    std::string res = get_response_string(200, "OK", *it);
+    for(auto pd: peer_list) {
+        if(pd.is_active) 
+            if(now - pd.registration_time < 7200)
+                res += pd.to_string() + "\r\n";
+            else
+                pd.is_active = false;
+    }
+    return res;
+}
+
 std::string RegistrationServer::register_peer(std::unordered_map<std::string, std::string> &request) {
     time_t now = time(0);
     char* dt = ctime(&now);
     std::string thehost = request["HOST"];
+    std::string name = request["PEER_NAME"];
     int port_num = stoi(request["SERVER_PORT"]);
     auto it = find_if(peer_list.begin(), peer_list.end(), [&thehost](const PeerDetails& p){return p.host_name == thehost;});
     if(it != peer_list.end()) {
@@ -146,6 +176,7 @@ std::string RegistrationServer::register_peer(std::unordered_map<std::string, st
     } else {
         PeerDetails pd = PeerDetails();
         pd.host_name = thehost;
+        pd.peer_name = name;
         pd.is_active = true;
         pd.ttl = 7200;
         pd.times_registered = 1;

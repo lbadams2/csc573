@@ -21,6 +21,7 @@
 
 struct PeerDetails {
     std::string host_name;
+    std::string peer_name;
     int cookie;
     bool is_active;
     int ttl;
@@ -28,6 +29,7 @@ struct PeerDetails {
     int times_registered;
     std::string datetime;
     time_t registration_time;
+    std::string to_string() const;
     
     bool operator==(const PeerDetails& rhs) const {
         return host_name == rhs.host_name;
@@ -48,9 +50,9 @@ class RegistrationServer {
     
     private:
         std::string register_peer(std::unordered_map<std::string, std::string> &request);
-        void leave();
-        void pquery();
-        void keep_alive();
+        std::string leave(std::unordered_map<std::string, std::string> &request);
+        std::string pquery(std::unordered_map<std::string, std::string> &request);
+        std::string keep_alive(std::unordered_map<std::string, std::string> &request);
         std::string get_response_string(int code, std::string phrase, PeerDetails &pd);
         std::string get_stop_response();
         std::vector<PeerDetails> peer_list;
