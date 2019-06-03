@@ -43,55 +43,57 @@ struct Remote_Peer {
 };
 
 class Peer {
-    public:
-        Peer(std::string the_peer);
-        std::string host_name;
-        std::string peer_name;        
-        int cookie;
-        static bool replace(std::string& str, const std::string& from, const std::string& to);
-        static void move_rfc_files(std::string task);
-        static void clean_dirs(std::string peer_name);
-
-        class RFC_Server {
-            public:
-                RFC_Server(Peer &peer);
-                static std::string const response_str;
-                void start();
-                std::string rfc_query(std::unordered_map<std::string, std::string> &request);
-                std::string get_rfc(std::unordered_map<std::string, std::string> &request);                
-                std::unordered_map<std::string, std::string> read_request(std::string &req);
-            private:
-                Peer &parent;
-                std::string get_stop_response();
-                std::string get_response_string(int code, std::string phrase);
-                static int available_port;
-                int server_port;
-                static int get_port();
-        };
-
-        class RFC_Client {
-            public:
-                RFC_Client(Peer &peer);
-                static std::string const request_str;
-                void request(std::string method, std::string file_name);
-                std::string get_request_string(std::string method);
-                void send_request(std::string &req, std::string &method, std::string file_name);
-            private:
-                Peer &parent;
-                std::string get_response_data(std::string &res);
-                void rfc_query(std::string &res);
-                void save_rfc(std::string &res, std::string &file_name);
-                void pquery(std::string &res);
-        };
-
-        Peer::RFC_Client& get_rfc_client();
-        Peer::RFC_Server& get_rfc_server();      
+public:
+    Peer(std::string the_peer);
+    std::string host_name;
+    std::string peer_name;
+    int cookie;
+    int server_port;
+    static bool replace(std::string& str, const std::string& from, const std::string& to);
+    static void move_rfc_files(std::string task);
+    static void clean_dirs(std::string peer_name);
     
+    class RFC_Server {
+    public:
+        RFC_Server(Peer &peer);
+        static std::string const response_str;
+        void start();
+        std::string rfc_query(std::unordered_map<std::string, std::string> &request);
+        std::string get_rfc(std::unordered_map<std::string, std::string> &request);
+        std::unordered_map<std::string, std::string> read_request(std::string &req);
     private:
-        std::vector<RFC_Record> rfc_index;
-        std::vector<Remote_Peer> peer_index;
-        Peer::RFC_Client rfc_client;
-        Peer::RFC_Server rfc_server;
+        Peer &parent;
+        std::string get_response_string(int code, std::string phrase);
+        static int available_port;
+        static int get_port();
+    };
+    
+    class RFC_Client {
+    public:
+        RFC_Client(Peer &peer);
+        static std::string const request_str;
+        void request(std::string method, std::unordered_map<std::string, std::string> args);
+        std::string get_request_string(std::string method);
+        void send_request(std::string &req, std::string &method, std::unordered_map<std::string, std::string> args);
+    private:
+        Peer &parent;
+        std::string get_response_data(std::string &res);
+        void rfc_query(std::string &res);
+        void save_rfc(std::string &res, std::string &file_name);
+        void pquery(std::string &res);
+        void set_cookie(std::string &res);
+    };
+    
+    Peer::RFC_Client& get_rfc_client();
+    Peer::RFC_Server& get_rfc_server();
+    std::vector<Remote_Peer>& get_peer_index();
+    std::vector<RFC_Record>& get_rfc_index();
+    
+private:
+    std::vector<RFC_Record> rfc_index;
+    std::vector<Remote_Peer> peer_index;
+    Peer::RFC_Client rfc_client;
+    Peer::RFC_Server rfc_server;
 };
 
 #endif /* RegistrationServer_h */

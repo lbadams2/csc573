@@ -1,6 +1,12 @@
 #include "RegistrationServer.h"
 
-RegistrationServer::RegistrationServer(): peer_list(std::vector<PeerDetails>()) {}
+RegistrationServer::RegistrationServer(): peer_list(std::vector<PeerDetails>()) {
+    char hostname[1024];
+    hostname[1023] = '\0';
+    gethostname(hostname, 1023);
+    std::string s(hostname);
+    host_name = s;
+}
 
 std::string const RegistrationServer::response_str = "P2P-DI/1.0 <status_code> <phrase> \r\nContent-Length: <LENGTH>\r\nCOOKIE: <COOKIE>\r\nDATE: <DATE>\r\nPORT: <PORT>\r\nHOST: <HOST>\r\n";
 
@@ -10,12 +16,11 @@ void RegistrationServer::run_thread() {
 }
 
 void RegistrationServer::start_server() {
-    int server_fd, new_socket, valread, client_socket[30], max_clients = 30;
+    int server_fd, new_socket, client_socket[30], max_clients = 30;
     int opt = 1, max_sd, i, sd;
     struct sockaddr_in address;
     int addrlen = sizeof(address);
     char buffer[1024] = {0};
-    char const *hello = "Hello from server";
     // set of socket descriptors
     fd_set readfds;
     
@@ -23,22 +28,16 @@ void RegistrationServer::start_server() {
         client_socket[i] = 0;
     }
     
-    std::cout << "rs about to open socket\n";
-    //std::cout.flush();
     if((server_fd = socket(AF_INET, SOCK_STREAM, 0)) == 0) {
         perror("socket failed");
         exit(EXIT_FAILURE);
     }
-    std::cout << "rs opened socket\n";
-    //std::cout.flush();
     
     // set socket to accept multiple connections
     if(setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt))) {
         perror("rs setsockopt");
         exit(EXIT_FAILURE);
     }
-    std::cout << "rs set sock opt\n";
-    //std::cout.flush();
     
     address.sin_family = AF_INET;
     address.sin_addr.s_addr = INADDR_ANY;
@@ -49,20 +48,13 @@ void RegistrationServer::start_server() {
         perror("bind failed");
         exit(EXIT_FAILURE);
     }
-    std::cout << "rs performed bind\n";
-    //std::cout.flush();
     
     // 3 is how many pending connections queue will hold
     if(listen(server_fd, 3) < 0) {
         perror("listen");
         exit(EXIT_FAILURE);
     }
-    std::cout << "rs performed listen\n";
-    //std::cout.flush();
-    /*
-     
-     std::cout << "performed accept\n";*/
-    //std::cout.flush();
+    
     while(true) {
         // clear the socket set
         FD_ZERO(&readfds);
@@ -84,92 +76,104 @@ void RegistrationServer::start_server() {
                 perror("accept");
                 exit(EXIT_FAILURE);
             }
-            printf("New connection , socket fd is %d , ip is : %s , port : %d  \n" , new_socket , inet_ntoa(address.sin_addr) , ntohs
-                   (address.sin_port));
+            //printf("New connection , socket fd is %d , ip is : %s , port : %d  \n" , new_socket , inet_ntoa(address.sin_addr) , ntohs
+            //       (address.sin_port));
             
             int length = 1024;
             bzero(buffer, length);
             int block_sz = 0;
             std::string req = "";
-            std::cout << "rs starting to read request\n";
             while((block_sz = read(new_socket, buffer, 1024)) > 0) {
                 std::string chunk(buffer);
-                std::cout << "rs req chunk: " << chunk << "\n";
                 req += chunk;
                 bzero(buffer, length);
                 if(block_sz == 0 || block_sz != length)
                     break;
             }
-            std::cout << "rs done reading request\n";
-            std::cout << "rs calling str to map\n";
+            std::cout << "Registration server incoming request\n" << req << "\n";
             std::unordered_map<std::string, std::string> req_map = read_request(req);
-            std::cout << "rs done str to map\n";
             std::string response_str;
             if(req_map["type"] == "REGISTER")
                 response_str = register_peer(req_map);
             else if(req_map["type"] == "STOP") {
-                response_str = get_stop_response();
+                response_str = get_stop_response(req_map);
                 const char* c_res_str = response_str.c_str();
                 send(new_socket, c_res_str, strlen(c_res_str), 0);
-                std::cout << "rs about to break\n";
                 break;
             }
-            else if(req_map["type"] == "PQUERY") {
+            else if(req_map["type"] == "PQUERY")
                 response_str = pquery(req_map);
-            }
+            else if(req_map["type"] == "LEAVE")
+                response_str = leave(req_map);
+            else if(req_map["type"] == "KEEPALIVE")
+                response_str = keep_alive(req_map);
             const char* c_res_str = response_str.c_str();
             send(new_socket, c_res_str, strlen(c_res_str), 0);
-            // read incoming message
-            //valread = read(new_socket, buffer, 1024);
-            // register, leave, pquery, or keep alive
         }
     }
     close(server_fd);
-    std::cout << "rs broke out of while loop\n";
     return;
-    //printf("Hello message sent from server\n");
 }
 
 std::string PeerDetails::to_string() const {
     std::string str = "host:" + host_name + " port:" + std::to_string(port) + " peer_name:" + peer_name;
+    return str;
 }
 
 std::string RegistrationServer::leave(std::unordered_map<std::string, std::string> &request) {
-
+    std::string name = request["PEER_NAME"];
+    auto it = find_if(peer_list.begin(), peer_list.end(), [&name](const PeerDetails& p){return p.peer_name == name;});
+    (*it).is_active = false;
+    std::string res = get_response_string(200, "LEFT", *it);
+    return res;
 }
 
 std::string RegistrationServer::keep_alive(std::unordered_map<std::string, std::string> &request) {
-    
+    std::string name = request["PEER_NAME"];
+    auto it = find_if(peer_list.begin(), peer_list.end(), [&name](const PeerDetails& p){return p.peer_name == name;});
+    (*it).is_active = true;
+    (*it).registration_time = time(0);
+    std::string res = get_response_string(200, "ALIVE", *it);
+    return res;
 }
 
 std::string RegistrationServer::pquery(std::unordered_map<std::string, std::string> &request) {
-    std::string thehost = request["HOST"];
+    std::string name = request["PEER_NAME"];
+    trim(name);
     time_t now = time(0);
-    auto it = find_if(peer_list.begin(), peer_list.end(), [&thehost](const PeerDetails& p){return p.host_name == thehost;});
+    auto it = find_if(peer_list.begin(), peer_list.end(), [&name](const PeerDetails& p){return p.peer_name == name;});
     std::string res = get_response_string(200, "OK", *it);
+    std::string data;
     for(auto pd: peer_list) {
-        if(pd.is_active) 
-            if(now - pd.registration_time < 7200)
-                res += pd.to_string() + "\r\n";
+        if(pd.is_active) {
+            if(now - pd.registration_time < 7200 && pd.peer_name != name)
+                data += pd.to_string() + "\r\n";
             else
                 pd.is_active = false;
+        }
     }
+    res += data;
+    replace(res, "Content-Length: 0", "Content-Length: " + std::to_string(data.size()));
     return res;
 }
 
 std::string RegistrationServer::register_peer(std::unordered_map<std::string, std::string> &request) {
     time_t now = time(0);
     char* dt = ctime(&now);
+    std::string date_string(dt);
+    trim(date_string);
     std::string thehost = request["HOST"];
+    trim(thehost);
     std::string name = request["PEER_NAME"];
-    int port_num = stoi(request["SERVER_PORT"]);
-    auto it = find_if(peer_list.begin(), peer_list.end(), [&thehost](const PeerDetails& p){return p.host_name == thehost;});
+    trim(name);
+    int port_num = stoi(request["PEER_SERVER_PORT"]);
+    auto it = find_if(peer_list.begin(), peer_list.end(), [&name](const PeerDetails& p){return p.peer_name == name;});
     if(it != peer_list.end()) {
         PeerDetails pd = *it;
         pd.is_active = true;
         pd.ttl = 7200;
         pd.times_registered++;
-        pd.datetime = dt;
+        pd.datetime = date_string;
         pd.port = port_num;
         pd.registration_time = now;
         return get_response_string(200, "UPDATED", pd);
@@ -180,7 +184,7 @@ std::string RegistrationServer::register_peer(std::unordered_map<std::string, st
         pd.is_active = true;
         pd.ttl = 7200;
         pd.times_registered = 1;
-        pd.datetime = dt;
+        pd.datetime = date_string;
         pd.cookie = peer_list.size();
         pd.port = port_num;
         pd.registration_time = now;
@@ -197,12 +201,13 @@ bool RegistrationServer::replace(std::string& str, const std::string& from, cons
     return true;
 }
 
-std::string RegistrationServer::get_stop_response() {
+std::string RegistrationServer::get_stop_response(std::unordered_map<std::string, std::string> &request) {
     std::string s = response_str;
-    replace(s, "<status_code>", "209");
-    replace(s, "<phrase>", "STOPPED");
-    s += "\r\n";
-    return s;
+    std::string name = request["PEER_NAME"];
+    trim(name);
+    auto it = find_if(peer_list.begin(), peer_list.end(), [&name](const PeerDetails& p){return p.peer_name == name;});
+    PeerDetails pd = *it;
+    return get_response_string(209, "STOPPED", pd);
 }
 
 std::string RegistrationServer::get_response_string(int code, std::string phrase, PeerDetails &pd) {
@@ -220,20 +225,14 @@ std::string RegistrationServer::get_response_string(int code, std::string phrase
 
 std::unordered_map<std::string, std::string> RegistrationServer::read_request(std::string &req) {
     std::unordered_map<std::string, std::string> map;
-    std::string::size_type pos = 0, prev = 0, data_start = 0;
+    std::string::size_type pos = 0, prev = 0;
     std::string delimiter = "\r\n", type = "", method = "", val = "", key = "", data = "";
     int line_num = 0;
-    bool is_data;
     while((pos = req.find(delimiter, prev)) != std::string::npos) {
         std::string line = req.substr(prev, pos-prev);
-        std::cout << "rs str to map " << line << "\n";
-        if(line.length() ==  0) {
-            //is_data = true;
-            //data_start = pos + delimiter.size();
-            //data = req.substr(data_start + 1);
-            //map["data"] = data;
+        //std::cout << "rs str to map " << line << "\n";
+        if(line.length() ==  0)
             break;
-        }
         if(line_num == 0) {
             method = line.substr(0, 1);
             if(method == "P") {
@@ -265,10 +264,3 @@ std::unordered_map<std::string, std::string> RegistrationServer::read_request(st
     }
     return map;
 }
-
-/*
-RegistrationServer::~RegistrationServer() {
-    if(_th.joinable())
-        _th.join();
-}
- */
