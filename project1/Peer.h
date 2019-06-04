@@ -73,7 +73,7 @@ public:
         RFC_Client(Peer &peer);
         static std::string const request_str;
         void request(std::string method, std::unordered_map<std::string, std::string> args);
-        std::string get_request_string(std::string method);
+        std::string get_request_string(std::string method, std::unordered_map<std::string, std::string> args);
         void send_request(std::string &req, std::string &method, std::unordered_map<std::string, std::string> args);
     private:
         Peer &parent;
@@ -88,6 +88,21 @@ public:
     Peer::RFC_Server& get_rfc_server();
     std::vector<Remote_Peer>& get_peer_index();
     std::vector<RFC_Record>& get_rfc_index();
+    
+    static inline void ltrim(std::string &s) {
+        s.erase(s.begin(), std::find_if(s.begin(), s.end(), [](int ch) {
+            return !std::isspace(ch);
+        }));
+    }
+    static inline void rtrim(std::string &s) {
+        s.erase(std::find_if(s.rbegin(), s.rend(), [](int ch) {
+            return !std::isspace(ch);
+        }).base(), s.end());
+    }
+    static inline void trim(std::string &s) {
+        ltrim(s);
+        rtrim(s);
+    }
     
 private:
     std::vector<RFC_Record> rfc_index;

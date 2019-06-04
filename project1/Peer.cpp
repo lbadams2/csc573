@@ -206,14 +206,15 @@ std::string Peer::RFC_Server::rfc_query(std::unordered_map<std::string, std::str
             data += r.to_string() + "\r\n";
     }
     replace(res, "Content-Length: 0", "Content-Length: " + std::to_string(data.size()));
-    res += data;
+    res += data + "\r\n";
     return res;
 }
 
 std::string Peer::RFC_Server::get_rfc(std::unordered_map<std::string, std::string> &request) {
     std::string res = get_response_string(200, "OK");
     time_t now = time(0);
-    std::string title = request["title"];
+    std::string title = request["TITLE"];
+    trim(title);
     std::string name = parent.peer_name;
     auto it = parent.rfc_index.begin();
     for( ; it != parent.rfc_index.end(); it++) {
@@ -236,6 +237,7 @@ std::string Peer::RFC_Server::get_rfc(std::unordered_map<std::string, std::strin
     sstr << ifs.rdbuf();
     std::string file_string = sstr.str();
     res += file_string;
+    replace(res, "Content-Length: 0", "Content-Length: " + std::to_string(file_string.size()));
     return res;
 }
 
@@ -300,7 +302,7 @@ std::string const Peer::RFC_Client::request_str = "<method> <document> P2P-DI/1.
 Peer::RFC_Client::RFC_Client(Peer &peer): parent(peer) {}
 
 void Peer::RFC_Client::request(std::string method, std::unordered_map<std::string, std::string> args) {
-    std::string req_str = get_request_string(method);
+    std::string req_str = get_request_string(method, args);
     send_request(req_str, method, args);
 }
 
@@ -347,7 +349,10 @@ void Peer::RFC_Client::send_request(std::string &req_str, std::string &method, s
             break;
     }
     close(sock);
-    std::cout << parent.peer_name << " client incoming response\n" << res << "\n";
+    if(method == "Getrfc")
+        std::cout << parent.peer_name << " client incoming response\n" << res.substr(0, 200) << "...\n" << "Remaining lines omitted\r\n";
+    else
+        std::cout << parent.peer_name << " client incoming response\n" << res << "\r\n";
     set_cookie(res);
     
     std::string res_data;
@@ -361,7 +366,7 @@ void Peer::RFC_Client::send_request(std::string &req_str, std::string &method, s
     }
     else if(method == "Getrfc") {
         res_data = get_response_data(res);
-        save_rfc(res_data, args["FILE_NAME"]);
+        save_rfc(res_data, args["title"]);
     }
     //return std::vector<Remote_Peer>();
 }
@@ -388,7 +393,7 @@ void Peer::RFC_Client::set_cookie(std::string &res) {
 }
 
 void Peer::RFC_Client::save_rfc(std::string &res, std::string &file_name) {
-    std::string path("/Users/liam_adams/my_repos/csc573/project1/peer_rfc_files/" + parent.peer_name + "/" + file_name + ".txt");
+    std::string path = "/Users/liam_adams/my_repos/csc573/project1/peer_rfc_files/" + parent.peer_name + "/" + file_name + ".txt";
     std::ofstream out(path);
     out << res;
     out.close();
@@ -478,9 +483,12 @@ std::string Peer::RFC_Client::get_response_data(std::string &res) {
     return res.substr(prev);
 }
 
-std::string Peer::RFC_Client::get_request_string(std::string method) {
+std::string Peer::RFC_Client::get_request_string(std::string method, std::unordered_map<std::string, std::string> args) {
     std::string s = Peer::RFC_Client::request_str;
-    replace(s, "<method>", "POST");
+    if(method == "Getrfc" || method == "Pquery" || method == "Rfcquery")
+        replace(s, "<method>", "GET");
+    else
+        replace(s, "<method>", "POST");
     replace(s, "<document>", method);
     replace(s, "<host>", parent.host_name);
     replace(s, "<peer_name>", parent.peer_name);
@@ -489,6 +497,8 @@ std::string Peer::RFC_Client::get_request_string(std::string method) {
         replace(s, "<cookie>", std::to_string(parent.cookie));
     else
         replace(s, "<cookie>", "N/A");
+    if(method == "Getrfc")
+        s += "TITLE: " + args["title"] + "\r\n";
     s += "\r\n";
     return s;
 }

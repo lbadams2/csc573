@@ -31,7 +31,7 @@ void test_task() {
     th_a_client = std::thread(&Peer::RFC_Client::request, a_client, "Pquery", arg_map);
     th_a_client.join();
     std::vector<Remote_Peer> peers = a->get_peer_index();
-    std::cout << "peer a index size " << peers.size() << "\n";
+    //std::cout << "peer a index size " << peers.size() << "\n";
     
     // query peer for rfc list
     int remote_peer_port = peers[0].port;
@@ -39,12 +39,21 @@ void test_task() {
     th_a_client = std::thread(&Peer::RFC_Client::request, a_client, "Rfcquery", arg_map);
     th_a_client.join();
     std::vector<RFC_Record> rfc_list = a->get_rfc_index();
-    std::cout << "peer a rfc index size " << rfc_list.size() << "\n";
+    //std::cout << "peer a rfc index size " << rfc_list.size() << "\n";
     
     // download rfc
-    std::string file_name = rfc_list[0].title;
-    arg_map["FILE_NAME"] = file_name;
+    std::string title = rfc_list[0].title;
+    arg_map["title"] = title;
     th_a_client = std::thread(&Peer::RFC_Client::request, a_client, "Getrfc", arg_map);
+    th_a_client.join();
+    
+    // peer b leaves
+    arg_map.clear();
+    th_b_client = std::thread(&Peer::RFC_Client::request, b_client, "Leave", arg_map);
+    th_b_client.join();
+    
+    // peer a query for peer list again
+    th_a_client = std::thread(&Peer::RFC_Client::request, a_client, "Pquery", arg_map);
     th_a_client.join();
     
     // stop registration server

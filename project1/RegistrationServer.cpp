@@ -122,6 +122,7 @@ std::string PeerDetails::to_string() const {
 
 std::string RegistrationServer::leave(std::unordered_map<std::string, std::string> &request) {
     std::string name = request["PEER_NAME"];
+    trim(name);
     auto it = find_if(peer_list.begin(), peer_list.end(), [&name](const PeerDetails& p){return p.peer_name == name;});
     (*it).is_active = false;
     std::string res = get_response_string(200, "LEFT", *it);
@@ -130,6 +131,7 @@ std::string RegistrationServer::leave(std::unordered_map<std::string, std::strin
 
 std::string RegistrationServer::keep_alive(std::unordered_map<std::string, std::string> &request) {
     std::string name = request["PEER_NAME"];
+    trim(name);
     auto it = find_if(peer_list.begin(), peer_list.end(), [&name](const PeerDetails& p){return p.peer_name == name;});
     (*it).is_active = true;
     (*it).registration_time = time(0);
@@ -152,7 +154,12 @@ std::string RegistrationServer::pquery(std::unordered_map<std::string, std::stri
                 pd.is_active = false;
         }
     }
-    res += data;
+    if(data.length() > 0)
+        res += data + "\r\n";
+    else {
+        data = "No active peers\r\n";
+        res += data;
+    }
     replace(res, "Content-Length: 0", "Content-Length: " + std::to_string(data.size()));
     return res;
 }
