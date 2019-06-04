@@ -50,7 +50,7 @@ void RegistrationServer::start_server() {
     }
     
     // 3 is how many pending connections queue will hold
-    if(listen(server_fd, 3) < 0) {
+    if(listen(server_fd, 300) < 0) {
         perror("listen");
         exit(EXIT_FAILURE);
     }

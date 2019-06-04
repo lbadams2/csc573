@@ -38,6 +38,21 @@ void Peer::move_rfc_files(std::string task) {
             i++;
         }
     }
+    else if(task == "task1") {
+        clean_dirs("peer_0");
+        clean_dirs("peer_1");
+        clean_dirs("peer_2");
+        clean_dirs("peer_3");
+        clean_dirs("peer_4");
+        clean_dirs("peer_5");
+        while((entry = readdir(dp))) {
+            std::string name(entry->d_name);
+            if(name == "." || name == "..")
+                continue;
+            cmd = "cp /Users/liam_adams/my_repos/csc573/project1/rfc_files/" + name + " " + "/Users/liam_adams/my_repos/csc573/project1/peer_rfc_files/peer_0";
+            system(cmd.c_str());
+        }
+    }
 }
 
 bool Peer::replace(std::string& str, const std::string& from, const std::string& to) {
@@ -134,7 +149,7 @@ void Peer::RFC_Server::start() {
     }
     std::cout << "ps binded to port " << parent.server_port << "\n";
     // 3 is how many pending connections queue will hold
-    if(listen(server_fd, 3) < 0) {
+    if(listen(server_fd, 300) < 0) {
         perror("listen");
         exit(EXIT_FAILURE);
     }
@@ -299,7 +314,7 @@ std::unordered_map<std::string, std::string> Peer::RFC_Server::read_request(std:
  */
 std::string const Peer::RFC_Client::request_str = "<method> <document> P2P-DI/1.0 \r\nHOST: <host>\r\nPEER_SERVER_PORT: <server_port>\r\nCOOKIE: <cookie>\r\nPEER_NAME: <peer_name>\r\n";
 
-Peer::RFC_Client::RFC_Client(Peer &peer): parent(peer) {}
+Peer::RFC_Client::RFC_Client(Peer &peer): parent(peer), files_downloaded(0) {}
 
 void Peer::RFC_Client::request(std::string method, std::unordered_map<std::string, std::string> args) {
     std::string req_str = get_request_string(method, args);
@@ -349,8 +364,8 @@ void Peer::RFC_Client::send_request(std::string &req_str, std::string &method, s
             break;
     }
     close(sock);
-    if(method == "Getrfc")
-        std::cout << parent.peer_name << " client incoming response\n" << res.substr(0, 200) << "...\n" << "Remaining lines omitted\r\n";
+    if(res.size() > 501)
+        std::cout << parent.peer_name << " client incoming response\n" << res.substr(0, 500) << "...\n" << "Remaining lines omitted\r\n";
     else
         std::cout << parent.peer_name << " client incoming response\n" << res << "\r\n";
     set_cookie(res);
@@ -397,6 +412,7 @@ void Peer::RFC_Client::save_rfc(std::string &res, std::string &file_name) {
     std::ofstream out(path);
     out << res;
     out.close();
+    this->files_downloaded++;
 }
 
 // host port title peername

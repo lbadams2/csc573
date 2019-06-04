@@ -2,7 +2,88 @@
 #include "RegistrationServer.h"
 #include <iostream>
 #include <thread>
+#include <mutex>
+#include <condition_variable>
+#include <queue>
+#include <functional>
 //using namespace std;
+
+class ThreadPool
+{
+public:
+    
+    ThreadPool (int threads) : shutdown_ (false)
+    {
+        // Create the specified number of threads
+        threads_.reserve (threads);
+        // emplace takes an rvalue
+        for (int i = 0; i < threads; ++i)
+            threads_.emplace_back (std::bind (&ThreadPool::threadEntry, this, i));
+    }
+    
+    ~ThreadPool ()
+    {
+        {
+            // Unblock any threads and tell them to stop
+            std::unique_lock <std::mutex> l (lock_);
+            
+            shutdown_ = true;
+            condVar_.notify_all();
+        }
+        
+        // Wait for all threads to stop
+        std::cerr << "Joining threads" << std::endl;
+        for (auto& thread : threads_)
+            thread.join();
+    }
+    
+    void doJob (std::function <void (void)> func)
+    {
+        // Place a job on the queu and unblock a thread
+        std::unique_lock <std::mutex> l (lock_);
+        
+        jobs_.emplace (std::move (func));
+        condVar_.notify_one();
+    }
+    
+protected:
+    // this is the function the thread is executing, this function executes the job, don't need join because of while(1)
+    void threadEntry (int i)
+    {
+        std::function <void (void)> job;
+        
+        while (1)
+        {
+            {
+                std::unique_lock <std::mutex> l (lock_);
+                
+                while (! shutdown_ && jobs_.empty())
+                    condVar_.wait (l);
+                
+                if (jobs_.empty ())
+                {
+                    // No jobs to do and we are shutting down
+                    std::cerr << "Thread " << i << " terminates" << std::endl;
+                    return;
+                }
+                
+                std::cerr << "Thread " << i << " does a job" << std::endl;
+                job = std::move (jobs_.front ());
+                jobs_.pop();
+            }
+            
+            // Do the job without holding any locks
+            job ();
+        }
+        
+    }
+    
+    std::mutex lock_;
+    std::condition_variable condVar_;
+    bool shutdown_;
+    std::queue <std::function <void (void)>> jobs_;
+    std::vector <std::thread> threads_;
+};
 
 void test_task() {
     // initialize directories and files for this task
@@ -76,11 +157,149 @@ void test_task() {
     delete b;
 }
 
+void download_files(ThreadPool *pool, int num_files, std::vector<RFC_Record> &rfc_list, Peer::RFC_Client &client, int port) {
+    std::unordered_map<std::string, std::string> arg_map;
+    std::string title;
+    arg_map["PORT"] = std::to_string(port);
+    for(int i = 0; i < num_files + 1; i++) {
+        title = rfc_list[i].title;
+        arg_map["title"] = title;
+        pool->doJob (std::bind (&Peer::RFC_Client::request, client, "Getrfc", arg_map));
+    }
+}
+
+void task1() {
+    // initialize directories and files for this task
+    Peer::move_rfc_files("task1");
+    
+    // construct peer objects
+    Peer *p0 = new Peer("peer_0");
+    Peer::RFC_Client &p0_client = p0->get_rfc_client();
+    Peer::RFC_Server &p0_server = p0->get_rfc_server();
+    Peer *p1 = new Peer("peer_1");
+    Peer::RFC_Client &p1_client = p1->get_rfc_client();
+    Peer::RFC_Server &p1_server = p1->get_rfc_server();
+    Peer *p2 = new Peer("peer_2");
+    Peer::RFC_Client &p2_client = p2->get_rfc_client();
+    Peer::RFC_Server &p2_server = p2->get_rfc_server();
+    Peer *p3 = new Peer("peer_3");
+    Peer::RFC_Client &p3_client = p3->get_rfc_client();
+    Peer::RFC_Server &p3_server = p3->get_rfc_server();
+    Peer *p4 = new Peer("peer_4");
+    Peer::RFC_Client &p4_client = p4->get_rfc_client();
+    Peer::RFC_Server &p4_server = p4->get_rfc_server();
+    Peer *p5 = new Peer("peer_5");
+    Peer::RFC_Client &p5_client = p5->get_rfc_client();
+    Peer::RFC_Server &p5_server = p5->get_rfc_server();
+    
+    //start peer servers
+    std::thread th_p0_server(&Peer::RFC_Server::start, p0_server);
+    std::thread th_p1_server(&Peer::RFC_Server::start, p1_server);
+    std::thread th_p2_server(&Peer::RFC_Server::start, p2_server);
+    std::thread th_p3_server(&Peer::RFC_Server::start, p3_server);
+    std::thread th_p4_server(&Peer::RFC_Server::start, p4_server);
+    std::thread th_p5_server(&Peer::RFC_Server::start, p5_server);
+    
+    
+    // register peer servers
+    std::unordered_map<std::string, std::string> arg_map;
+    std::thread th_p0_client(&Peer::RFC_Client::request, p0_client, "Register", arg_map);
+    std::thread th_p1_client(&Peer::RFC_Client::request, p1_client, "Register", arg_map);
+    std::thread th_p2_client(&Peer::RFC_Client::request, p2_client, "Register", arg_map);
+    std::thread th_p3_client(&Peer::RFC_Client::request, p3_client, "Register", arg_map);
+    std::thread th_p4_client(&Peer::RFC_Client::request, p4_client, "Register", arg_map);
+    std::thread th_p5_client(&Peer::RFC_Client::request, p5_client, "Register", arg_map);
+    th_p0_client.join();
+    th_p1_client.join();
+    th_p2_client.join();
+    th_p3_client.join();
+    th_p4_client.join();
+    th_p5_client.join();
+    
+    // get peer list
+    th_p0_client = std::thread(&Peer::RFC_Client::request, p0_client, "Pquery", arg_map);
+    th_p1_client = std::thread(&Peer::RFC_Client::request, p1_client, "Pquery", arg_map);
+    th_p2_client = std::thread(&Peer::RFC_Client::request, p2_client, "Pquery", arg_map);
+    th_p3_client = std::thread(&Peer::RFC_Client::request, p3_client, "Pquery", arg_map);
+    th_p4_client = std::thread(&Peer::RFC_Client::request, p4_client, "Pquery", arg_map);
+    th_p5_client = std::thread(&Peer::RFC_Client::request, p5_client, "Pquery", arg_map);
+    th_p0_client.join();
+    th_p1_client.join();
+    th_p2_client.join();
+    th_p3_client.join();
+    th_p4_client.join();
+    th_p5_client.join();
+    
+    // get rfc index from peer 0
+    int p0_port = p0->server_port;
+    arg_map["PORT"] = std::to_string(p0_port);
+    th_p1_client = std::thread(&Peer::RFC_Client::request, p1_client, "Rfcquery", arg_map);
+    th_p2_client = std::thread(&Peer::RFC_Client::request, p2_client, "Rfcquery", arg_map);
+    th_p3_client = std::thread(&Peer::RFC_Client::request, p3_client, "Rfcquery", arg_map);
+    th_p4_client = std::thread(&Peer::RFC_Client::request, p4_client, "Rfcquery", arg_map);
+    th_p5_client = std::thread(&Peer::RFC_Client::request, p5_client, "Rfcquery", arg_map);
+    th_p1_client.join();
+    th_p2_client.join();
+    th_p3_client.join();
+    th_p4_client.join();
+    th_p5_client.join();
+    
+    // each peer download 50 files from peer 0
+    // create thread pool for clients
+    ThreadPool pool(60);
+    pool.doJob(std::bind(download_files, &pool, 50, p1->get_rfc_index(), p1_client, p0_port));
+    pool.doJob(std::bind(download_files, &pool, 50, p2->get_rfc_index(), p2_client, p0_port));
+    pool.doJob(std::bind(download_files, &pool, 50, p3->get_rfc_index(), p3_client, p0_port));
+    pool.doJob(std::bind(download_files, &pool, 50, p4->get_rfc_index(), p4_client, p0_port));
+    pool.doJob(std::bind(download_files, &pool, 50, p5->get_rfc_index(), p5_client, p0_port));
+    //download_files(&pool, 50, p5->get_rfc_index(), p5_client, p0_port);
+    //while(p5_client.files_downloaded < 50){std::cout << "files downloaded " << p5_client.files_downloaded << "\n";}
+    
+    // stop registration server
+    arg_map.clear();
+    th_p1_client = std::thread(&Peer::RFC_Client::request, p1_client, "Stop", arg_map);
+    th_p1_client.join();
+    
+    // stop peer servers
+    arg_map["PORT"] = std::to_string(p0->server_port);
+    th_p0_client = std::thread(&Peer::RFC_Client::request, p0_client, "Stop_Peer", arg_map);
+    th_p0_server.join();
+    th_p0_client.join();
+    arg_map["PORT"] = std::to_string(p1->server_port);
+    th_p1_client = std::thread(&Peer::RFC_Client::request, p1_client, "Stop_Peer", arg_map);
+    th_p1_server.join();
+    th_p1_client.join();
+    arg_map["PORT"] = std::to_string(p2->server_port);
+    th_p2_client = std::thread(&Peer::RFC_Client::request, p2_client, "Stop_Peer", arg_map);
+    th_p2_server.join();
+    th_p2_client.join();
+    arg_map["PORT"] = std::to_string(p3->server_port);
+    th_p3_client = std::thread(&Peer::RFC_Client::request, p3_client, "Stop_Peer", arg_map);
+    th_p3_server.join();
+    th_p3_client.join();
+    arg_map["PORT"] = std::to_string(p4->server_port);
+    th_p4_client = std::thread(&Peer::RFC_Client::request, p4_client, "Stop_Peer", arg_map);
+    th_p4_server.join();
+    th_p4_client.join();
+    arg_map["PORT"] = std::to_string(p5->server_port);
+    th_p5_client = std::thread(&Peer::RFC_Client::request, p5_client, "Stop_Peer", arg_map);
+    th_p5_server.join();
+    th_p5_client.join();
+    
+    delete p0;
+    delete p1;
+    delete p2;
+    delete p3;
+    delete p4;
+    delete p5;
+}
+
 // /Users/liam_adams/my_repos/csc573/project1/rfc_files/rfc8598.txt
 int main() {
     RegistrationServer *rs = new RegistrationServer();
     std::thread rs_thread(&RegistrationServer::start_server, rs);
-    test_task();
+    //test_task();
+    task1();
     
     rs_thread.join();
     delete rs;

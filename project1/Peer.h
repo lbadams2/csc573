@@ -75,6 +75,7 @@ public:
         void request(std::string method, std::unordered_map<std::string, std::string> args);
         std::string get_request_string(std::string method, std::unordered_map<std::string, std::string> args);
         void send_request(std::string &req, std::string &method, std::unordered_map<std::string, std::string> args);
+        int files_downloaded;
     private:
         Peer &parent;
         std::string get_response_data(std::string &res);
