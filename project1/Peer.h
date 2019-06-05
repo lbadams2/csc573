@@ -18,6 +18,8 @@
 #include <sstream>
 #include <chrono>
 #include <map>
+#include <set>
+#include <utility>
 #define RS_PORT 65423
 
 struct RFC_Record {
@@ -79,6 +81,7 @@ public:
         void send_request(std::string &req, std::string &method, std::unordered_map<std::string, std::string> args);
         int files_downloaded;
         void download_files(std::unordered_map<std::string, std::string> args);
+        void download_files_2(std::unordered_map<std::string, std::string> args);
         
     private:
         Peer &parent;
@@ -95,6 +98,8 @@ public:
     std::vector<Remote_Peer>& get_peer_index();
     std::vector<RFC_Record>& get_rfc_index();
     std::map<int, long>& get_download_times();
+    std::set<std::string>& get_local_titles();
+    std::map<std::string, std::vector<std::pair<std::string, int>>>& get_remote_titles();
     
     static inline void ltrim(std::string &s) {
         s.erase(s.begin(), std::find_if(s.begin(), s.end(), [](int ch) {
@@ -113,6 +118,8 @@ public:
     
 private:
     std::vector<RFC_Record> rfc_index;
+    std::set<std::string> local_titles;
+    std::map<std::string, std::vector<std::pair<std::string, int>>> remote_titles;
     std::vector<Remote_Peer> peer_index;
     Peer::RFC_Client rfc_client;
     Peer::RFC_Server rfc_server;

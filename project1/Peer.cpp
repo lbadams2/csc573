@@ -53,6 +53,26 @@ void Peer::move_rfc_files(std::string task) {
             system(cmd.c_str());
         }
     }
+    else if(task == "task2") {
+        clean_dirs("peer_0");
+        clean_dirs("peer_1");
+        clean_dirs("peer_2");
+        clean_dirs("peer_3");
+        clean_dirs("peer_4");
+        clean_dirs("peer_5");
+        int i = 0, peer_num;
+        std::string s;
+        while((entry = readdir(dp))) {
+            std::string name(entry->d_name);
+            if(name == "." || name == "..")
+                continue;
+            peer_num = i / 10;
+            s = std::to_string(peer_num);
+            cmd = "cp /Users/liam_adams/my_repos/csc573/project1/rfc_files/" + name + " " + "/Users/liam_adams/my_repos/csc573/project1/peer_rfc_files/peer_" + s;
+            system(cmd.c_str());
+            i++;
+        }
+    }
 }
 
 bool Peer::replace(std::string& str, const std::string& from, const std::string& to) {
@@ -76,7 +96,8 @@ Peer::RFC_Server& Peer::get_rfc_server() {return rfc_server;}
 std::vector<Remote_Peer>& Peer::get_peer_index() {return peer_index;}
 std::vector<RFC_Record>& Peer::get_rfc_index() {return rfc_index;}
 std::map<int, long>& Peer::get_download_times() {return download_times;}
-
+std::set<std::string>& Peer::get_local_titles() {return local_titles;}
+std::map<std::string, std::vector<std::pair<std::string, int>>>& Peer::get_remote_titles(){return remote_titles;}
 
 /*
  *
@@ -112,6 +133,7 @@ Peer::RFC_Server::RFC_Server(Peer &peer): parent(peer) {
         time_t now = time(0);
         RFC_Record r(num, title, s, parent.peer_name, parent.server_port, 7200, now);
         peer.rfc_index.push_back(r);
+        peer.local_titles.insert(r.title);
     }
 }
 
@@ -456,6 +478,85 @@ void Peer::RFC_Client::send_request(std::string &req_str, std::string &method, s
     //return std::vector<Remote_Peer>();
 }
 
+void Peer::RFC_Client::download_files_2(std::unordered_map<std::string, std::string> args) {
+    //int num_files = stoi(args["num_files"]);
+    int sock = 0;
+    struct sockaddr_in serv_addr;
+    char buffer[1024] = {0};
+    
+    // copy 0 into serv_addr members
+    memset(&serv_addr, '0', sizeof(serv_addr));
+    serv_addr.sin_family = AF_INET;
+    /*
+    if(args.find("PORT") == args.end())
+        serv_addr.sin_port = htons(RS_PORT);
+    else
+        serv_addr.sin_port = htons(stoi(args["PORT"]));
+     */
+    
+    // Convert IPv4 and IPv6 addresses from text to binary form
+    if(inet_pton(AF_INET, "127.0.0.1", &serv_addr.sin_addr) <= 0) {
+        std::cout << "\nInvalid address/ Address not supported \n";
+        exit(EXIT_FAILURE);
+    }
+    
+    std::string req_str, title, res_data;
+    const char* req;
+    int i = 0;
+    for( auto const& [key, val] : parent.remote_titles )
+    {
+        std::string peer_name = key;
+        int port = val[0].second;
+        for(auto p: val) {
+            std::string title = p.first;
+            if((sock = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
+                std::cout << "\n Socket creation error \n";
+                exit(EXIT_FAILURE);
+            }
+            serv_addr.sin_port = htons(port);
+            if(connect(sock, (struct sockaddr *) &serv_addr, sizeof(serv_addr)) < 0) {
+                std::cout << "\n Connection failed \n";
+                exit(EXIT_FAILURE);
+            }
+            //RFC_Record &r = rfc_list[i];
+            //trim(title);
+            //std::cout << "title length " << title.length();
+            args["title"] = title;
+            req_str = get_request_string("Getrfc", args);
+            req = req_str.c_str();
+            auto start = std::chrono::high_resolution_clock::now();
+            long start_count = time(0);
+            send(sock, req, strlen(req), 0);
+            int length = 1024;
+            bzero(buffer, length);
+            int block_sz = 0;
+            std::string res = "";
+            while((block_sz = read(sock, buffer, 1024)) > 0) {
+                std::string chunk(buffer);
+                res += chunk;
+                bzero(buffer, length);
+                if(block_sz == 0 || block_sz != length)
+                    break;
+            }
+            auto stop = std::chrono::high_resolution_clock::now();
+            long stop_count = time(0);
+            long diff = stop_count - start_count;
+            auto duration = std::chrono::duration_cast<std::chrono::microseconds>(stop - start);
+            long countt = duration.count();
+            parent.download_times[i] = duration.count();
+            std::cout << parent.peer_name << " client incoming response\n" << res.substr(0, 500) << "...\n" << "Remaining lines omitted\r\n";
+            res_data = get_response_data(res);
+            save_rfc(res_data, title);
+            //std::set<std::string> local = parent.local_titles;
+            if(parent.local_titles.find(title) == parent.local_titles.end())
+                parent.local_titles.insert(title);
+            close(sock);
+            i++;
+        }
+    }
+    std::cout << "out of download files\n";
+}
+
 void Peer::RFC_Client::set_cookie(std::string &res) {
     std::string::size_type prev = 0, pos = 0;
     std::string delimiter = "\r\n", key, val;
@@ -524,6 +625,8 @@ void Peer::RFC_Client::rfc_query(std::string &res) {
         }
         line_prev = 0;
         prev = pos + delimiter.size();
+        if(parent.local_titles.find(rfc.title) == parent.local_titles.end())
+            parent.remote_titles[rfc.peer_name].push_back(std::make_pair(rfc.title, rfc.port));
     }
 }
 
