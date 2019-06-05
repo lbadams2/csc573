@@ -478,7 +478,7 @@ void Peer::RFC_Client::send_request(std::string &req_str, std::string &method, s
     //return std::vector<Remote_Peer>();
 }
 
-void Peer::RFC_Client::download_files_2(std::unordered_map<std::string, std::string> args) {
+void Peer::RFC_Client::download_files_2(std::unordered_map<std::string, std::string> args, std::vector<std::string> order) {
     //int num_files = stoi(args["num_files"]);
     int sock = 0;
     struct sockaddr_in serv_addr;
@@ -503,12 +503,17 @@ void Peer::RFC_Client::download_files_2(std::unordered_map<std::string, std::str
     std::string req_str, title, res_data;
     const char* req;
     int i = 0;
-    for( auto const& [key, val] : parent.remote_titles )
+    for( auto const& peer_name : order )
     {
-        std::string peer_name = key;
+        if(peer_name == parent.peer_name)
+            continue;
+        //std::string peer_name = key;
+        auto val = parent.remote_titles[peer_name];
         int port = val[0].second;
         for(auto p: val) {
             std::string title = p.first;
+            if(parent.local_titles.find(title) != parent.local_titles.end())
+                continue;
             if((sock = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
                 std::cout << "\n Socket creation error \n";
                 exit(EXIT_FAILURE);
@@ -584,6 +589,7 @@ void Peer::RFC_Client::save_rfc(std::string &res, std::string &file_name) {
     out << res;
     out.close();
     this->files_downloaded++;
+    parent.local_titles.insert(file_name);
 }
 
 // host port title peername

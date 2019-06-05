@@ -425,6 +425,7 @@ void task2() {
     th_p3_client.join();
     th_p4_client.join();
     th_p5_client.join();
+     
     
     int p1_port = p1->server_port;
     arg_map["PORT"] = std::to_string(p1_port);
@@ -491,18 +492,56 @@ void task2() {
     th_p3_client.join();
     th_p4_client.join();
     
-    th_p0_client = std::thread(&Peer::RFC_Client::download_files_2, p0_client, arg_map);
-    th_p1_client = std::thread(&Peer::RFC_Client::download_files_2, p1_client, arg_map);
-    th_p2_client = std::thread(&Peer::RFC_Client::download_files_2, p2_client, arg_map);
-    th_p3_client = std::thread(&Peer::RFC_Client::download_files_2, p3_client, arg_map);
-    th_p4_client = std::thread(&Peer::RFC_Client::download_files_2, p4_client, arg_map);
-    th_p5_client = std::thread(&Peer::RFC_Client::download_files_2, p5_client, arg_map);
+    std::vector<std::string> peer_names0;
+    peer_names0.push_back("peer_1");
+    peer_names0.push_back("peer_2");
+    peer_names0.push_back("peer_3");
+    peer_names0.push_back("peer_4");
+    peer_names0.push_back("peer_5");
+    std::vector<std::string> peer_names1;
+    peer_names1.push_back("peer_2");
+    peer_names1.push_back("peer_3");
+    peer_names1.push_back("peer_4");
+    peer_names1.push_back("peer_5");
+    peer_names1.push_back("peer_0");
+    std::vector<std::string> peer_names2;
+    peer_names2.push_back("peer_3");
+    peer_names2.push_back("peer_4");
+    peer_names2.push_back("peer_5");
+    peer_names2.push_back("peer_0");
+    peer_names2.push_back("peer_1");
+    std::vector<std::string> peer_names3;
+    peer_names3.push_back("peer_4");
+    peer_names3.push_back("peer_5");
+    peer_names3.push_back("peer_0");
+    peer_names3.push_back("peer_1");
+    peer_names3.push_back("peer_2");
+    std::vector<std::string> peer_names4;
+    peer_names4.push_back("peer_5");
+    peer_names4.push_back("peer_0");
+    peer_names4.push_back("peer_1");
+    peer_names4.push_back("peer_2");
+    peer_names4.push_back("peer_3");
+    std::vector<std::string> peer_names5;
+    peer_names5.push_back("peer_0");
+    peer_names5.push_back("peer_1");
+    peer_names5.push_back("peer_2");
+    peer_names5.push_back("peer_3");
+    peer_names5.push_back("peer_4");
+    th_p0_client = std::thread(&Peer::RFC_Client::download_files_2, p0_client, arg_map, peer_names0);
+    th_p1_client = std::thread(&Peer::RFC_Client::download_files_2, p1_client, arg_map, peer_names1);
+    th_p2_client = std::thread(&Peer::RFC_Client::download_files_2, p2_client, arg_map, peer_names2);
+    th_p3_client = std::thread(&Peer::RFC_Client::download_files_2, p3_client, arg_map, peer_names3);
+    th_p4_client = std::thread(&Peer::RFC_Client::download_files_2, p4_client, arg_map, peer_names4);
+    th_p5_client = std::thread(&Peer::RFC_Client::download_files_2, p5_client, arg_map, peer_names5);
     th_p0_client.join();
     th_p1_client.join();
     th_p2_client.join();
     th_p3_client.join();
     th_p4_client.join();
     th_p5_client.join();
+    std::cout << "download size " << p1->get_download_times().size() << "\n";
+    std::cout << "done\n";
     
     // stop registration server
     arg_map.clear();

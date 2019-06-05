@@ -81,7 +81,7 @@ public:
         void send_request(std::string &req, std::string &method, std::unordered_map<std::string, std::string> args);
         int files_downloaded;
         void download_files(std::unordered_map<std::string, std::string> args);
-        void download_files_2(std::unordered_map<std::string, std::string> args);
+        void download_files_2(std::unordered_map<std::string, std::string> args, std::vector<std::string> order);
         
     private:
         Peer &parent;
