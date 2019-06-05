@@ -16,6 +16,8 @@
 #include <unordered_map>
 #include <fstream>
 #include <sstream>
+#include <chrono>
+#include <map>
 #define RS_PORT 65423
 
 struct RFC_Record {
@@ -76,6 +78,8 @@ public:
         std::string get_request_string(std::string method, std::unordered_map<std::string, std::string> args);
         void send_request(std::string &req, std::string &method, std::unordered_map<std::string, std::string> args);
         int files_downloaded;
+        void download_files(std::unordered_map<std::string, std::string> args);
+        
     private:
         Peer &parent;
         std::string get_response_data(std::string &res);
@@ -83,12 +87,14 @@ public:
         void save_rfc(std::string &res, std::string &file_name);
         void pquery(std::string &res);
         void set_cookie(std::string &res);
+        
     };
     
     Peer::RFC_Client& get_rfc_client();
     Peer::RFC_Server& get_rfc_server();
     std::vector<Remote_Peer>& get_peer_index();
     std::vector<RFC_Record>& get_rfc_index();
+    std::map<int, long>& get_download_times();
     
     static inline void ltrim(std::string &s) {
         s.erase(s.begin(), std::find_if(s.begin(), s.end(), [](int ch) {
@@ -110,6 +116,7 @@ private:
     std::vector<Remote_Peer> peer_index;
     Peer::RFC_Client rfc_client;
     Peer::RFC_Server rfc_server;
+    std::map<int, long> download_times;
 };
 
 #endif /* RegistrationServer_h */

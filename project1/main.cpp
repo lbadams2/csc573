@@ -8,6 +8,7 @@
 #include <functional>
 //using namespace std;
 
+/*
 class ThreadPool
 {
 public:
@@ -84,6 +85,7 @@ protected:
     std::queue <std::function <void (void)>> jobs_;
     std::vector <std::thread> threads_;
 };
+ */
 
 void test_task() {
     // initialize directories and files for this task
@@ -157,6 +159,7 @@ void test_task() {
     delete b;
 }
 
+/*
 void download_files(ThreadPool *pool, int num_files, std::vector<RFC_Record> &rfc_list, Peer::RFC_Client &client, int port) {
     std::unordered_map<std::string, std::string> arg_map;
     std::string title;
@@ -166,6 +169,31 @@ void download_files(ThreadPool *pool, int num_files, std::vector<RFC_Record> &rf
         arg_map["title"] = title;
         pool->doJob (std::bind (&Peer::RFC_Client::request, client, "Getrfc", arg_map));
     }
+}
+ 
+
+void download_files(int num_files, std::vector<RFC_Record> &rfc_list, Peer::RFC_Client &client, int port) {
+    std::unordered_map<std::string, std::string> arg_map;
+    std::string title;
+    arg_map["PORT"] = std::to_string(port);
+    for(int i = 0; i < num_files + 1; i++) {
+        title = rfc_list[i].title;
+        arg_map["title"] = title;
+        client.request("Getrfc", arg_map);
+        //pool->doJob (std::bind (&Peer::RFC_Client::request, client, "Getrfc", arg_map));
+    }
+}
+ */
+
+void write_download_times(std::string peer_name, std::map<int, long> &times) {
+    std::ofstream stream("/Users/liam_adams/my_repos/csc573/project1/" + peer_name + "_times");
+    std::string s;
+    for(auto& kv : times) {
+        s = std::to_string(kv.second);
+        stream << s << '\n';
+        // Add '\n' character  ^^^^
+    }
+    stream.close();
 }
 
 void task1() {
@@ -246,14 +274,31 @@ void task1() {
     
     // each peer download 50 files from peer 0
     // create thread pool for clients
+    /*
     ThreadPool pool(60);
     pool.doJob(std::bind(download_files, &pool, 50, p1->get_rfc_index(), p1_client, p0_port));
     pool.doJob(std::bind(download_files, &pool, 50, p2->get_rfc_index(), p2_client, p0_port));
     pool.doJob(std::bind(download_files, &pool, 50, p3->get_rfc_index(), p3_client, p0_port));
     pool.doJob(std::bind(download_files, &pool, 50, p4->get_rfc_index(), p4_client, p0_port));
     pool.doJob(std::bind(download_files, &pool, 50, p5->get_rfc_index(), p5_client, p0_port));
-    //download_files(&pool, 50, p5->get_rfc_index(), p5_client, p0_port);
-    //while(p5_client.files_downloaded < 50){std::cout << "files downloaded " << p5_client.files_downloaded << "\n";}
+     
+    th_p1_client = std::thread(download_files, p1_client, 50, p1->get_rfc_index(), p1_client, p0_port);
+    th_p2_client = std::thread(download_files, p1_client, 50, p2->get_rfc_index(), p2_client, p0_port);
+    th_p3_client = std::thread(download_files, p1_client, 50, p3->get_rfc_index(), p3_client, p0_port);
+    th_p4_client = std::thread(download_files, p1_client, 50, p4->get_rfc_index(), p4_client, p0_port);
+    th_p5_client = std::thread(download_files, p1_client, 50, p5->get_rfc_index(), p5_client, p0_port);
+     */
+    arg_map["num_files"] = "50";
+    th_p1_client = std::thread(&Peer::RFC_Client::download_files, p1_client, arg_map);
+    th_p2_client = std::thread(&Peer::RFC_Client::download_files, p2_client, arg_map);
+    th_p3_client = std::thread(&Peer::RFC_Client::download_files, p3_client, arg_map);
+    th_p4_client = std::thread(&Peer::RFC_Client::download_files, p4_client, arg_map);
+    th_p5_client = std::thread(&Peer::RFC_Client::download_files, p5_client, arg_map);
+    th_p1_client.join();
+    th_p2_client.join();
+    th_p3_client.join();
+    th_p4_client.join();
+    th_p5_client.join();
     
     // stop registration server
     arg_map.clear();
@@ -286,6 +331,18 @@ void task1() {
     th_p5_server.join();
     th_p5_client.join();
     
+    write_download_times(p1->peer_name, p1->get_download_times());
+    write_download_times(p2->peer_name, p2->get_download_times());
+    write_download_times(p3->peer_name, p3->get_download_times());
+    write_download_times(p4->peer_name, p4->get_download_times());
+    write_download_times(p5->peer_name, p5->get_download_times());
+    /*
+    std::cout << "peer 1 times size " << p1->get_download_times().size() << "\n";
+    std::cout << "peer 2 times size " << p2->get_download_times().size() << "\n";
+    std::cout << "peer 3 times size " << p3->get_download_times().size() << "\n";
+    std::cout << "peer 4 times size " << p4->get_download_times().size() << "\n";
+    std::cout << "peer 5 times size " << p5->get_download_times().size() << "\n";
+    */
     delete p0;
     delete p1;
     delete p2;

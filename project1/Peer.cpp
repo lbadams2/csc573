@@ -75,6 +75,7 @@ Peer::RFC_Client& Peer::get_rfc_client() {return rfc_client;}
 Peer::RFC_Server& Peer::get_rfc_server() {return rfc_server;}
 std::vector<Remote_Peer>& Peer::get_peer_index() {return peer_index;}
 std::vector<RFC_Record>& Peer::get_rfc_index() {return rfc_index;}
+std::map<int, long>& Peer::get_download_times() {return download_times;}
 
 
 /*
@@ -217,8 +218,10 @@ std::string Peer::RFC_Server::rfc_query(std::unordered_map<std::string, std::str
     time_t now = time(0);
     std::string data;
     for(auto r: parent.rfc_index) {
-        if(now - r.refresh_time < 7200)
+        if(now - r.refresh_time < 7200) {
+            std::string s = r.to_string();
             data += r.to_string() + "\r\n";
+        }
     }
     replace(res, "Content-Length: 0", "Content-Length: " + std::to_string(data.size()));
     res += data + "\r\n";
@@ -319,6 +322,73 @@ Peer::RFC_Client::RFC_Client(Peer &peer): parent(peer), files_downloaded(0) {}
 void Peer::RFC_Client::request(std::string method, std::unordered_map<std::string, std::string> args) {
     std::string req_str = get_request_string(method, args);
     send_request(req_str, method, args);
+}
+
+void Peer::RFC_Client::download_files(std::unordered_map<std::string, std::string> args) {
+    int num_files = stoi(args["num_files"]);
+    int sock = 0;
+    struct sockaddr_in serv_addr;
+    char buffer[1024] = {0};
+    
+    // copy 0 into serv_addr members
+    memset(&serv_addr, '0', sizeof(serv_addr));
+    serv_addr.sin_family = AF_INET;
+    if(args.find("PORT") == args.end())
+        serv_addr.sin_port = htons(RS_PORT);
+    else
+        serv_addr.sin_port = htons(stoi(args["PORT"]));
+    
+    // Convert IPv4 and IPv6 addresses from text to binary form
+    if(inet_pton(AF_INET, "127.0.0.1", &serv_addr.sin_addr) <= 0) {
+        std::cout << "\nInvalid address/ Address not supported \n";
+        exit(EXIT_FAILURE);
+    }
+    
+    std::string req_str, title, res_data;
+    const char* req;
+    std::vector<RFC_Record> rfc_list = parent.get_rfc_index();
+    for(int i = 0; i < num_files; i++) {
+        if((sock = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
+            std::cout << "\n Socket creation error \n";
+            exit(EXIT_FAILURE);
+        }
+        if(connect(sock, (struct sockaddr *) &serv_addr, sizeof(serv_addr)) < 0) {
+            std::cout << "\n Connection failed \n";
+            exit(EXIT_FAILURE);
+        }
+        //RFC_Record &r = rfc_list[i];
+        title = rfc_list[i].title;
+        //trim(title);
+        //std::cout << "title length " << title.length();
+        args["title"] = title;
+        req_str = get_request_string("Getrfc", args);
+        req = req_str.c_str();
+        auto start = std::chrono::high_resolution_clock::now();
+        long start_count = time(0);
+        send(sock, req, strlen(req), 0);
+        int length = 1024;
+        bzero(buffer, length);
+        int block_sz = 0;
+        std::string res = "";
+        while((block_sz = read(sock, buffer, 1024)) > 0) {
+            std::string chunk(buffer);
+            res += chunk;
+            bzero(buffer, length);
+            if(block_sz == 0 || block_sz != length)
+                break;
+        }
+        auto stop = std::chrono::high_resolution_clock::now();
+        long stop_count = time(0);
+        long diff = stop_count - start_count;
+        auto duration = std::chrono::duration_cast<std::chrono::microseconds>(stop - start);
+        long countt = duration.count();
+        parent.download_times[i] = duration.count();
+        std::cout << parent.peer_name << " client incoming response\n" << res.substr(0, 500) << "...\n" << "Remaining lines omitted\r\n";
+        res_data = get_response_data(res);
+        save_rfc(res_data, title);
+        close(sock);
+    }
+    std::cout << "out of download files\n";
 }
 
 void Peer::RFC_Client::send_request(std::string &req_str, std::string &method, std::unordered_map<std::string, std::string> args) {
@@ -448,6 +518,8 @@ void Peer::RFC_Client::rfc_query(std::string &res) {
             rfc.refresh_time = time(0);
             rfc.rfc_num = stoi(rfc.title.substr(3, 4));
             rfc.ttl = 7200;
+            if(rfc.title.length() != 7)
+                rfc.title = "rfc" + std::to_string(rfc.rfc_num);
             parent.rfc_index.push_back(rfc);
         }
         line_prev = 0;
