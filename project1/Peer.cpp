@@ -11,18 +11,18 @@ std::string RFC_Record::to_string() const {
 
 // /Users/liam_adams/my_repos/csc573/project1/
 void Peer::clean_dirs(std::string peer_name) {
-    std::string cmd = "mkdir /Users/liam_adams/my_repos/csc573/project1/peer_rfc_files/" + peer_name;
+    std::string cmd = "mkdir peer_rfc_files/" + peer_name;
     system(cmd.c_str());
 }
 
 void Peer::move_rfc_files(std::string task) {
-    std::string cmd = "rm -rf /Users/liam_adams/my_repos/csc573/project1/peer_rfc_files";
+    std::string cmd = "rm -rf peer_rfc_files";
     system(cmd.c_str());
-    cmd = "mkdir /Users/liam_adams/my_repos/csc573/project1/peer_rfc_files";
+    cmd = "mkdir peer_rfc_files";
     system(cmd.c_str());
     struct dirent *entry;
     DIR *dp;
-    dp = opendir("/Users/liam_adams/my_repos/csc573/project1/rfc_files");
+    dp = opendir("rfc_files");
     if(task == "test") {
         clean_dirs("peer_a");
         clean_dirs("peer_b");
@@ -33,7 +33,7 @@ void Peer::move_rfc_files(std::string task) {
                 continue;
             if(i == 2)
                 break;
-            cmd = "cp /Users/liam_adams/my_repos/csc573/project1/rfc_files/" + name + " " + "/Users/liam_adams/my_repos/csc573/project1/peer_rfc_files/peer_b";
+            cmd = "cp rfc_files/" + name + " " + "peer_rfc_files/peer_b";
             system(cmd.c_str());
             i++;
         }
@@ -49,7 +49,7 @@ void Peer::move_rfc_files(std::string task) {
             std::string name(entry->d_name);
             if(name == "." || name == "..")
                 continue;
-            cmd = "cp /Users/liam_adams/my_repos/csc573/project1/rfc_files/" + name + " " + "/Users/liam_adams/my_repos/csc573/project1/peer_rfc_files/peer_0";
+            cmd = "cp rfc_files/" + name + " " + "peer_rfc_files/peer_0";
             system(cmd.c_str());
         }
     }
@@ -68,7 +68,7 @@ void Peer::move_rfc_files(std::string task) {
                 continue;
             peer_num = i / 10;
             s = std::to_string(peer_num);
-            cmd = "cp /Users/liam_adams/my_repos/csc573/project1/rfc_files/" + name + " " + "/Users/liam_adams/my_repos/csc573/project1/peer_rfc_files/peer_" + s;
+            cmd = "cp rfc_files/" + name + " " + "peer_rfc_files/peer_" + s;
             system(cmd.c_str());
             i++;
         }
@@ -122,7 +122,7 @@ Peer::RFC_Server::RFC_Server(Peer &peer): parent(peer) {
     std::string s(hostname);
     struct dirent *entry;
     DIR *dp;
-    std::string dir_name = "/Users/liam_adams/my_repos/csc573/project1/peer_rfc_files/" + parent.peer_name;
+    std::string dir_name = "peer_rfc_files/" + parent.peer_name;
     dp = opendir(dir_name.c_str());
     while((entry = readdir(dp))) {
         std::string name(entry->d_name);
@@ -170,7 +170,7 @@ void Peer::RFC_Server::start() {
         parent.server_port = get_port();
         address.sin_port = htons(parent.server_port);
     }
-    std::cout << "ps binded to port " << parent.server_port << "\n";
+    //std::cout << "ps binded to port " << parent.server_port << "\n";
     // 3 is how many pending connections queue will hold
     if(listen(server_fd, 300) < 0) {
         perror("listen");
@@ -271,7 +271,7 @@ std::string Peer::RFC_Server::get_rfc(std::unordered_map<std::string, std::strin
     //    return r.title == title && r.peer_name == name && (now - r.refresh_time < 7200);
     //});
     RFC_Record r = *it;
-    std::string fn = "/Users/liam_adams/my_repos/csc573/project1/peer_rfc_files/" + r.peer_name + "/" + r.title + ".txt";
+    std::string fn = "peer_rfc_files/" + r.peer_name + "/" + r.title + ".txt";
     std::ifstream ifs(fn);
     std::stringstream sstr;
     sstr << ifs.rdbuf();
@@ -584,7 +584,7 @@ void Peer::RFC_Client::set_cookie(std::string &res) {
 }
 
 void Peer::RFC_Client::save_rfc(std::string &res, std::string &file_name) {
-    std::string path = "/Users/liam_adams/my_repos/csc573/project1/peer_rfc_files/" + parent.peer_name + "/" + file_name + ".txt";
+    std::string path = "peer_rfc_files/" + parent.peer_name + "/" + file_name + ".txt";
     std::ofstream out(path);
     out << res;
     out.close();

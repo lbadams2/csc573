@@ -186,7 +186,7 @@ void download_files(int num_files, std::vector<RFC_Record> &rfc_list, Peer::RFC_
  */
 
 void write_download_times(std::string peer_name, std::map<int, long> &times) {
-    std::ofstream stream("/Users/liam_adams/my_repos/csc573/project1/" + peer_name + "_times");
+    std::ofstream stream(peer_name + "_times");
     std::string s;
     for(auto& kv : times) {
         s = std::to_string(kv.second);
@@ -528,6 +528,22 @@ void task2() {
     peer_names5.push_back("peer_2");
     peer_names5.push_back("peer_3");
     peer_names5.push_back("peer_4");
+
+    //worst vectors
+    std::vector<std::string> worst_peer_names;
+    worst_peer_names.push_back("peer_0");
+    worst_peer_names.push_back("peer_1");
+    worst_peer_names.push_back("peer_2");
+    worst_peer_names.push_back("peer_3");
+    worst_peer_names.push_back("peer_4");
+    worst_peer_names.push_back("peer_5");
+    std::vector<std::string> worst_peer_names0;
+    worst_peer_names0.push_back("peer_5");
+    worst_peer_names0.push_back("peer_4");
+    worst_peer_names0.push_back("peer_3");
+    worst_peer_names0.push_back("peer_2");
+    worst_peer_names0.push_back("peer_1");
+    worst_peer_names0.push_back("peer_0");
     th_p0_client = std::thread(&Peer::RFC_Client::download_files_2, p0_client, arg_map, peer_names0);
     th_p1_client = std::thread(&Peer::RFC_Client::download_files_2, p1_client, arg_map, peer_names1);
     th_p2_client = std::thread(&Peer::RFC_Client::download_files_2, p2_client, arg_map, peer_names2);
@@ -540,8 +556,8 @@ void task2() {
     th_p3_client.join();
     th_p4_client.join();
     th_p5_client.join();
-    std::cout << "download size " << p1->get_download_times().size() << "\n";
-    std::cout << "done\n";
+    //std::cout << "download size " << p1->get_download_times().size() << "\n";
+    //std::cout << "done\n";
     
     // stop registration server
     arg_map.clear();
@@ -593,8 +609,9 @@ void task2() {
 int main() {
     RegistrationServer *rs = new RegistrationServer();
     std::thread rs_thread(&RegistrationServer::start_server, rs);
-    //test_task();
-    task2();
+    test_task();
+    //task1();
+    //task2();
     
     rs_thread.join();
     delete rs;
