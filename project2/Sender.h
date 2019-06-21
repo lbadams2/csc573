@@ -10,6 +10,7 @@
 #include <unistd.h>
 #include <iostream>
 #include <cstring>
+#include <chrono>
 #include <mutex>
 #include <thread>
 #include <condition_variable>
@@ -27,7 +28,7 @@ struct Segment {
 
 class Sender {
 public:
-    Sender(std::vector<string> hosts, const int port, const string file_name, const int mss);
+    Sender(std::vector<string> hosts, const int port, const string file_name, const int mss, const long timeout);
     void send_file(const char* host);
     void start();
     std::vector<int>& get_files_sent();
@@ -41,6 +42,7 @@ private:
     const int port;
     const string file_name;
     const int mss;
+    const long timeout;
     std::vector<char> buffer;
     std::vector<int> files_sent;
     Segment create_segment(std::vector<char> data);

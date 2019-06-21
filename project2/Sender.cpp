@@ -1,6 +1,6 @@
 #include "Sender.h"
 
-Sender::Sender(std::vector<string> theHosts, int thePort, string name, int theMss) : hosts(theHosts), port(thePort), file_name(name), mss(theMss) {
+Sender::Sender(std::vector<string> theHosts, const int thePort, const string name, const int theMss, const long theTimeout) : hosts(theHosts), port(thePort), file_name(name), mss(theMss), timeout(theTimeout) {
     std::ifstream infile(file_name, std::ios_base::binary);
     this->buffer = std::vector<char>(std::istreambuf_iterator<char>(infile), std::istreambuf_iterator<char>());
 }
@@ -45,6 +45,10 @@ void Sender::send_file(const char* host) {
         std::cout << "\n Socket creation error \n";
         exit(EXIT_FAILURE);
     }
+    struct timeval tv;
+    tv.tv_sec = timeout;
+    tv.tv_usec = 0;
+    setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, (const char*)&tv, sizeof tv);
     
     // copy 0 into serv_addr members
     memset(&serv_addr, '0', sizeof(serv_addr));
@@ -71,7 +75,9 @@ void Sender::send_file(const char* host) {
             std::vector<char> file_chunk(buffer.begin() + file_pos, buffer.end());
         Segment segment = create_segment(file_chunk);
 
-        bool is_ack = false;
+        bool is_ack = false, timed_out = false;
+        std::chrono::high_resolution_clock::time_point start_time, end_time;
+        long duration = 0;
         while(!is_ack) {
             if(connect(sock, (struct sockaddr *) &serv_addr, sizeof(serv_addr)) < 0) {
                 std::cout << "\n Connection failed \n";
@@ -80,7 +86,7 @@ void Sender::send_file(const char* host) {
             string req_str = segment.to_string();
             const char* req = req_str.c_str();
             send(sock, req, strlen(req), 0);
-
+            start_time = std::chrono::high_resolution_clock::now();
             bzero(res_buf, length);
             int block_sz = 0;
             std::string res = "";
@@ -90,8 +96,18 @@ void Sender::send_file(const char* host) {
                 bzero(res_buf, length);
                 if(block_sz == 0 || block_sz != length)
                     break;
+                end_time = std::chrono::high_resolution_clock::now();
+                duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time).count();
+                if(duration > timeout) {
+                    timed_out = true;
+                    break;
+                }
+            }            
+            if(timed_out || errno == ETIMEDOUT || errno == EWOULDBLOCK) {
+                std::cout << "time out occurred on read\n";
+                continue;
             }
-            is_ack = read_response(segment.seq_num, res);
+            is_ack = read_response(segment.seq_num, res);            
         }
         lock.lock();
         if(--worker_count == 0) {
@@ -99,6 +115,7 @@ void Sender::send_file(const char* host) {
             iteration_complete.notify_one();
         }
     }
+    close(sock);
     files_sent.push_back(1);
 }
 

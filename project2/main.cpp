@@ -12,7 +12,7 @@ int main(int argc, char** argv) {
     for(int i = 1; i < argc-3; i++)
         hosts.push_back(argv[i]);
 
-    Sender sender(hosts, port, file_name, mss);
+    Sender sender(hosts, port, file_name, mss, 2000);
     //std::mutex mrun;
     for(string host: hosts) {
         std::thread t(&Sender::send_file, &sender, host.c_str());
