@@ -1,6 +1,6 @@
 #include "Sender.h"
 
-Sender::Sender(std::vector<string> theHosts, const int thePort, const string name, const int theMss, const long theTimeout) : hosts(theHosts), port(thePort), file_name(name), mss(theMss), timeout(theTimeout) {
+Sender::Sender(std::vector<string> theHosts, const uint16_t thePort, const string name, const uint16_t theMss, const long theTimeout) : hosts(theHosts), port(thePort), file_name(name), mss(theMss), timeout(theTimeout) {
     std::ifstream infile(file_name, std::ios_base::binary);
     this->buffer = std::vector<char>(std::istreambuf_iterator<char>(infile), std::istreambuf_iterator<char>());
 }
@@ -28,11 +28,48 @@ void Sender::start() {
 }
 */
 
-Segment Sender::create_segment(std::vector<char> data) {
-
+Segment Sender::create_segment(std::vector<char> &data, const uint16_t port, unsigned int seq_num) {
+    Segment segment;
+    segment.dest_port = RECEIVER_PORT;
+    segment.source_port = port;
+    segment.length = data.size();
+    segment.seq_num = seq_num;
+    segment.checksum = segment.dest_port + segment.source_port + segment.length;
+    uint16_t concat;
+    for(auto it = data.begin(); it < data.end(); it++) {
+        concat = *it;
+        it++;
+        if(it == data.end())
+            concat = concat << 8;
+        else
+            concat = (concat << 8) | *it;
+        segment.checksum += concat;
+    }
+    segment.checksum = ~segment.checksum;
+    segment.data = data;
+    return segment;
 }
 
-bool Sender::read_response(int seq_num, string response) {
+string Segment::to_string() const {
+    string sn = std::to_string(seq_num);
+    sn = string(5 - sn.length(), '0').append(sn);
+    string sp = std::to_string(source_port);
+    sp = string(5 - sp.length(), '0').append(sp);
+    string l = std::to_string(length);
+    l = string(4 - l.length(), '0').append(l);
+    string cs = std::to_string(checksum);
+    cs = string(5 - cs.length(), '0').append(cs);
+    string seg_str = "Seq Num: " + sn + "\r\n"; // 16 bytes
+    seg_str += "Source Port: " + sp + "\r\n"; // 20  bytes
+    seg_str += "Dest Port: " + std::to_string(dest_port) + "\r\n"; // 17  bytes
+    seg_str += "Length: " + l + "\r\n"; // 14 bytes
+    seg_str += "Checksum: " + cs + "\r\n\r\n"; // 19 bytes
+    string s(data.begin(), data.end());
+    seg_str += s;
+    return seg_str;
+}
+
+bool Sender::read_response(unsigned int seq_num, string response) {
 
 }
 
@@ -62,18 +99,30 @@ void Sender::send_file(const char* host) {
     size_t file_size = buffer.size();
     size_t file_pos = 0;
     int next_iteration = 1;
+    bool establish = true;
     while(file_pos < file_size - 1) {
         std::unique_lock<std::mutex> lock(mrun);
         main_ready.wait(lock, [&next_iteration, this]{return next_iteration == current_iteration; });
         lock.unlock();
         ++next_iteration;
-
-        std::vector<char> file_chunk;
-        if(file_pos + mss < file_size)
-            std::vector<char> file_chunk(buffer.begin() + file_pos, buffer.begin() + file_pos + mss);
-        else
-            std::vector<char> file_chunk(buffer.begin() + file_pos, buffer.end());
-        Segment segment = create_segment(file_chunk);
+        Segment segment;
+        if(!establish) {
+            std::vector<char> file_chunk;
+            if(file_pos + mss < file_size) {
+                std::vector<char> file_chunk(buffer.begin() + file_pos, buffer.begin() + file_pos + mss);
+                file_pos += mss;
+            }
+            else {
+                std::vector<char> file_chunk(buffer.begin() + file_pos, buffer.end());
+                file_pos = file_size;
+            }
+            segment = create_segment(file_chunk, port, file_pos - mss);
+        }
+        else {
+            string data_str = "MSS: " + std::to_string(mss);
+            std::vector<char> mss_data(data_str.begin(), data_str.end());
+            segment = create_segment(mss_data, port, 0);
+        }
 
         bool is_ack = false, timed_out = false;
         std::chrono::high_resolution_clock::time_point start_time, end_time;
@@ -117,8 +166,4 @@ void Sender::send_file(const char* host) {
     }
     close(sock);
     files_sent.push_back(1);
-}
-
-string Segment::to_string() const {
-    return "";
 }
