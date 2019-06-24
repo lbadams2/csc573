@@ -3,16 +3,16 @@
 void ACK_Segment::init_static() {
     bool b[8] = {false};
     unsigned char zs = to_byte(b);
-    zeroes[0] = (char)zs;
-    zeroes[1] = (char)zs;
+    zeroes[0] = zs;
+    zeroes[1] = zs;
     for(int i = 0; i < 8; i++)
         if(i % 2 == 0)
             b[i] = false;
         else
             b[i] = true;
     unsigned char t = to_byte(b);
-    type[0] = (char)t;
-    type[1] = (char)t;
+    type[0] = t;
+    type[1] = t;
 }
 
 umap Receiver::read_segment(string segment, bool is_set_mss) {
@@ -96,15 +96,24 @@ void Receiver::send_ack(umap &seg_map) {
     if(seg_map["checksum_valid"] == "false")
         return;
     unsigned int sn = stoi(seg_map["seq_num"]);
-    vector<bool> snb = int_to_bool(sn);
-    char seq_bytes[4];
+    bool* snb = int_to_bool(sn);
+    unsigned char ack_bytes[8];
+    bool bool_byte[8];
+    unsigned char seg_byte;
+    int byte_num = 0;
     for(int i = 0; i < 32; i += 8) {
-        std::vector<bool> slice(snb.begin() + i, snb.begin() + i + 8);
-        bool* b = &slice[0];
-        unsigned char seg_byte = to_byte(b);
-        seq_bytes[i/8] = (char) seg_byte;
+        bool_byte[i] = snb[i];
+        if(i % 8 == 1) {      
+             seg_byte = to_byte(bool_byte);
+             byte_num = (i + 1)/8;
+        }
+        ack_bytes[byte_num - 1] = seg_byte;
     }
-    string ack_str = "Seq num: " + seg_bytes + "\r\n" + ACK_Segment::zeroes + "\r\n" + ACK_Segment::type + "\r\n"; 
+    ack_bytes[4] = ACK_Segment::zeroes[0];
+    ack_bytes[5] = ACK_Segment::zeroes[1];
+    ack_bytes[6] = ACK_Segment::type[0];
+    ack_bytes[7] = ACK_Segment::type[1];
+    //string ack_str = "Seq num: " + seq_bytes + "\r\n" + ACK_Segment::zeroes + "\r\n" + ACK_Segment::type + "\r\n"; 
 }
 
 void Receiver::download_file() {

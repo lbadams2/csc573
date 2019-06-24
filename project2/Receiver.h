@@ -15,9 +15,9 @@ typedef std::string string;
 typedef std::unordered_map<std::string, std::string> umap;
 
 struct ACK_Segment {
-    unsigned int seq_num;
-    static char zeroes[2];
-    static char type[2];
+    unsigned char seq_num[4];
+    static unsigned char zeroes[2];
+    static unsigned char type[2];
     static void init_static();
 };
 
@@ -51,15 +51,27 @@ static inline void from_byte(unsigned char c, bool b[8])
         b[i] = (c & (1<<i)) != 0;
 }
 
-static inline std::vector<bool> int_to_bool(int x) {
-  std::vector<bool> ret;
+static inline bool* int_to_bool(int x) {
+  bool ret[32];
+  int  i = 0;
   while(x) {
     if (x&1)
-      ret.push_back(true);
+      ret[i] = 1;
     else
-      ret.push_back(false);
+      ret[i] = 0;
     x>>=1;  
   }
-  std::reverse(ret.begin(),ret.end());
+  std::reverse(std::begin(ret),std::end(ret));
   return ret;
+}
+
+static inline int bitArrayToInt32(bool arr[], int count)
+{
+    int ret = 0;
+    int tmp;
+    for (int i = 0; i < count; i++) {
+        tmp = arr[i];
+        ret |= tmp << (count - i - 1);
+    }
+    return ret;
 }
