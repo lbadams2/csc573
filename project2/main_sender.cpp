@@ -3,6 +3,9 @@
 #include <mutex>
 #include <string>
 #include <vector>
+#include <iostream>
+
+using std::cout;
 
 int main(int argc, char** argv) {
     int mss = atoi(argv[argc-1]);
@@ -11,14 +14,16 @@ int main(int argc, char** argv) {
     std::vector<std::string> hosts;
     for(int i = 1; i < argc-3; i++)
         hosts.push_back(argv[i]);
-
-    Sender sender(hosts, port, file_name, mss, 2000);
+    
+    Sender sender(hosts, port, file_name, mss, 2);
     //std::mutex mrun;
+    std::vector<std::thread> threads;
     for(string host: hosts) {
         std::thread t(&Sender::send_file, &sender, host.c_str());
+        threads.push_back(std::move(t));
     }
-    std::vector files_sent = sender.get_files_sent();
-    while(files_sent.size() < hosts.size()) 
+    std::vector<int> files_sent = sender.get_files_sent();
+    while(files_sent.size() < hosts.size())
     {
         {
             std::lock_guard<std::mutex> lock(sender.mrun);
@@ -31,4 +36,6 @@ int main(int argc, char** argv) {
             sender.iteration_complete.wait(lock, [&sender]{return sender.worker_count == 0; });
         }
     }
+    for(auto& t: threads)
+        t.join();
 }

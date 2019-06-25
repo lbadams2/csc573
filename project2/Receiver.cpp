@@ -1,5 +1,8 @@
 #include "Receiver.h"
 
+unsigned char ACK_Segment::zeroes[2];
+unsigned char ACK_Segment::type[2];
+
 void ACK_Segment::init_static() {
     bool b[8] = {false};
     unsigned char zs = to_byte(b);
@@ -15,7 +18,9 @@ void ACK_Segment::init_static() {
     type[1] = t;
 }
 
-umap Receiver::read_segment(string segment, bool is_set_mss) {
+Receiver::Receiver(string fn, double lp): file_name(fn), loss_prob(lp) {}
+
+umap Receiver::read_segment(unsigned char* segment, bool is_set_mss) {
     umap map;
     std::string::size_type pos = 0, prev = 0;
     string delimiter = "\r\n", line;    
@@ -92,12 +97,20 @@ bool Receiver::validate_checksum(uint16_t checksum, umap &seg_map) {
     return val == VALID_CHECKSUM;
 }
 
-void Receiver::send_ack(umap &seg_map) {
-    if(seg_map["checksum_valid"] == "false")
-        return;
-    unsigned int sn = stoi(seg_map["seq_num"]);
-    bool* snb = int_to_bool(sn);
-    unsigned char ack_bytes[8];
+unsigned char* Receiver::get_ack() {    
+    // convert seq num to bool
+    bool snb[32];
+    int  i = 0;
+    while(next_seq_num) {
+        if (next_seq_num&1)
+            snb[i] = 1;
+        else
+            snb[i] = 0;
+        next_seq_num>>=1;
+        i++;
+    }
+    std::reverse(std::begin(snb),std::end(snb));
+    unsigned char* ack_bytes = new unsigned char[8];
     bool bool_byte[8];
     unsigned char seg_byte;
     int byte_num = 0;
@@ -113,6 +126,7 @@ void Receiver::send_ack(umap &seg_map) {
     ack_bytes[5] = ACK_Segment::zeroes[1];
     ack_bytes[6] = ACK_Segment::type[0];
     ack_bytes[7] = ACK_Segment::type[1];
+    return ack_bytes;
     //string ack_str = "Seq num: " + seq_bytes + "\r\n" + ACK_Segment::zeroes + "\r\n" + ACK_Segment::type + "\r\n"; 
 }
 
@@ -120,10 +134,13 @@ void Receiver::download_file() {
     int server_fd, new_socket;
     struct sockaddr_in address;
     int addrlen = sizeof(address);
-    int segment_size = 1000;
+    int segment_size = 20;
     umap seg_map;
-    char buffer[1000] = {0};
+    unsigned char buffer[20] = {0};
     ACK_Segment::init_static();
+    std::random_device rd;  //Will be used to obtain a seed for the random number engine
+    std::mt19937 gen(rd()); //Standard mersenne_twister_engine seeded with rd()
+    std::uniform_real_distribution<> dis(0.0, 1.0);
     if((server_fd = socket(AF_INET, SOCK_DGRAM, 0)) == 0) {
         perror("socket failed");
         exit(EXIT_FAILURE);
@@ -134,11 +151,14 @@ void Receiver::download_file() {
     address.sin_port = htons(PORT);
 
     // bind socket to port
+    bzero(buffer, segment_size);
+    int block_sz = 0;
+    bool is_set_mss = true;
     if(bind(server_fd, (struct sockaddr *) &address, sizeof(address)) < 0) {
         perror("bind failed");
         exit(EXIT_FAILURE);
     }
-    
+    /* 
     if (listen(server_fd, 3) < 0) 
     { 
         perror("listen"); 
@@ -150,23 +170,50 @@ void Receiver::download_file() {
         perror("accept"); 
         exit(EXIT_FAILURE); 
     } 
-    bzero(buffer, segment_size);
-    int block_sz = 0;
-    bool is_set_mss = true;
-    while((block_sz = read(new_socket, buffer, segment_size)) > 0) {
-        std::string segment(buffer);
-        if(is_set_mss) {
-            seg_map = read_segment(segment, true);
-            segment_size = mss + HEADER_SIZE;
-            buffer[segment_size] = {0};
-            is_set_mss = false;
+    */
+    while(true) {
+        while((block_sz = read(server_fd, buffer, segment_size)) > 0) {
+            cout << "Received data\n";
+            double rand_val = dis(gen);
+            if(rand_val <= loss_prob)
+                continue;
+            string segment(buffer);
+            if(is_set_mss) {
+                seg_map = read_segment(segment, true);
+                cout << "incoming segment set mss true - seq num " << seg_map["seq_num"] << std::endl;
+                segment_size = mss + HEADER_SIZE;
+                buffer[segment_size] = {0};
+                is_set_mss = false;
+            }
+            else {
+                seg_map = read_segment(segment, false);
+                cout << "incoming segment set mss false - seq num " << seg_map["seq_num"] << std::endl;
+                if(block_sz == 0) {
+                    cout << "received no data\n";
+                    break;
+                }
+            }
+            bzero(buffer, segment_size);
+            if(seg_map["checksum_valid"] == "false")
+                cout << "invalid checksum\n";
+            else {
+                if(seg_map["in_order"] == "true") {
+                    string data = seg_map["data"];
+                    std::ofstream out;
+                    out.open(file_name, std::ios_base::app);
+                    out << data;
+                    out.close();
+                    unsigned char* ack = get_ack();
+                    send(new_socket, ack, 8, 0);
+                    next_seq_num += mss;
+                    delete[] ack;
+                }
+                else {
+                    unsigned char* ack = get_ack();
+                    send(new_socket, ack, 8, 0);
+                    delete[] ack;
+                }
+            }
         }
-        else {
-            seg_map = read_segment(segment, false);
-            if(block_sz == 0 || block_sz != segment_size)
-                break;
-        }
-        bzero(buffer, segment_size);
-        send_ack(seg_map);
     }
 }

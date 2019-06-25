@@ -1,38 +1,50 @@
 #include "Sender.h"
 
+unsigned char Segment::type[2];
+
+void Segment::init_type() {
+    bool b[8] = {false};
+    for(int i = 0; i < 8; i++)
+        if(i % 2 == 0)
+            b[i] = true;
+        else
+            b[i] = false;
+    unsigned char t = to_byte(b);
+    type[0] = t;
+    type[1] = t;
+}
+
 Sender::Sender(std::vector<string> theHosts, const uint16_t thePort, const string name, const uint16_t theMss, const long theTimeout) : hosts(theHosts), port(thePort), file_name(name), mss(theMss), timeout(theTimeout) {
     std::ifstream infile(file_name, std::ios_base::binary);
-    this->buffer = std::vector<char>(std::istreambuf_iterator<char>(infile), std::istreambuf_iterator<char>());
+    this->buffer = std::vector<unsigned char>(std::istreambuf_iterator<char>(infile), std::istreambuf_iterator<char>());
 }
 
 std::vector<int>& Sender::get_files_sent() {return files_sent;}
 
 /*
-void Sender::start() {
-    for(string host: hosts) {
-        std::thread t(send_file, host.c_str());
-    }
-    while(files_sent.size() < hosts.size()) 
-    {
-        {
-            std::lock_guard<std::mutex> lock(mrun);
-            worker_count = hosts.size();
-            ++current_iteration;
-        }
-        main_ready.notify_all();
-        {
-            std::unique_lock<std::mutex> lock(mrun);
-            iteration_complete.wait(lock, [this]{return worker_count == 0; });
-        }
-    }
-}
-*/
+ void Sender::start() {
+ for(string host: hosts) {
+ std::thread t(send_file, host.c_str());
+ }
+ while(files_sent.size() < hosts.size())
+ {
+ {
+ std::lock_guard<std::mutex> lock(mrun);
+ worker_count = hosts.size();
+ ++current_iteration;
+ }
+ main_ready.notify_all();
+ {
+ std::unique_lock<std::mutex> lock(mrun);
+ iteration_complete.wait(lock, [this]{return worker_count == 0; });
+ }
+ }
+ }
+ */
 
-Segment Sender::create_segment(std::vector<char> &data, const uint16_t port, unsigned int seq_num) {
+/*
+Segment Sender::create_segment(std::vector<unsigned char> &data, unsigned int seq_num) {
     Segment segment;
-    segment.dest_port = RECEIVER_PORT;
-    segment.source_port = port;
-    segment.length = data.size();
     segment.seq_num = seq_num;
     segment.checksum = segment.dest_port + segment.source_port + segment.length;
     uint16_t concat;
@@ -49,35 +61,134 @@ Segment Sender::create_segment(std::vector<char> &data, const uint16_t port, uns
     segment.data = data;
     return segment;
 }
+ */
 
-string Segment::to_string() const {
-    string sn = std::to_string(seq_num);
-    sn = string(5 - sn.length(), '0').append(sn);
-    string sp = std::to_string(source_port);
-    sp = string(5 - sp.length(), '0').append(sp);
-    string l = std::to_string(length);
-    l = string(4 - l.length(), '0').append(l);
-    string cs = std::to_string(checksum);
-    cs = string(5 - cs.length(), '0').append(cs);
-    string seg_str = "Seq Num: " + sn + "\r\n"; // 16 bytes
-    seg_str += "Source Port: " + sp + "\r\n"; // 20  bytes
-    seg_str += "Dest Port: " + std::to_string(dest_port) + "\r\n"; // 17  bytes
-    seg_str += "Length: " + l + "\r\n"; // 14 bytes
-    seg_str += "Checksum: " + cs + "\r\n\r\n"; // 19 bytes
-    string s(data.begin(), data.end());
-    seg_str += s;
-    return seg_str;
+vector<unsigned char> Segment::to_bytes(bool mss_segment, uint16_t mss) {
+    // convert seq num to bool
+    bool snb[32];
+    int  i = 0;
+    unsigned int sn = seq_num;
+    while(sn) {
+        if (sn&1)
+            snb[i] = 1;
+        else
+            snb[i] = 0;
+        sn>>=1;
+        i++;
+    }
+    std::reverse(std::begin(snb),std::end(snb));
+    vector<unsigned char> header(8);
+    bool bool_byte[8];
+    unsigned char seg_byte;
+    int byte_num = 0;
+    for(int i = 0; i < 32; i += 8) {
+        bool_byte[i] = snb[i];
+        if(i % 8 == 1) {
+            seg_byte = to_byte(bool_byte);
+            byte_num = (i + 1)/8;
+        }
+        header[byte_num - 1] = seg_byte;
+    }
+    header[6] = type[0];
+    header[7] = type[1];
+    
+    uint16_t concat;
+    uint16_t sum;
+    for(int i = 0; i < 4; i += 2) {
+        concat = header[i];
+        concat = concat << 8;
+        concat = concat | header[i + 1];
+        sum += concat;
+    }
+    concat = header[6];
+    concat = concat << 8;
+    concat = concat | header[7];
+    sum += concat;
+    if(mss_segment) {
+        vector<unsigned char> mss_data;
+        mss_data.reserve(2);
+        bool mssb[16];
+        i = 0;
+        uint16_t m = mss;
+        while(m) {
+            if (m&1)
+                mssb[i] = 1;
+            else
+                mssb[i] = 0;
+            m>>=1;
+            i++;
+        }
+        std::reverse(std::begin(mssb),std::end(mssb));
+        byte_num = 0;
+        unsigned char mssbyte;
+        for(int i = 0; i < 16; i += 8) {
+            bool_byte[i] = mssb[i];
+            if(i % 8 == 1) {
+                mssbyte = to_byte(bool_byte);
+                byte_num = (i + 1)/8 + 3;
+            }
+            mss_data[byte_num] = mssbyte;
+        }
+        data = mss_data;
+    }
+    for(auto it = data.begin(); it < data.end(); it++) {
+        concat = *it;
+        it++;
+        if(it == data.end())
+            concat = concat << 8;
+        else
+            concat = (concat << 8) | *it;
+        sum += concat;
+    }
+    checksum = ~sum;
+    
+    bool csb[16];
+    i = 0;
+    uint16_t cs = checksum;
+    while(cs) {
+        if (cs&1)
+            csb[i] = 1;
+        else
+            csb[i] = 0;
+        cs>>=1;
+        i++;
+    }
+    std::reverse(std::begin(csb),std::end(csb));
+    byte_num = 0;
+    unsigned char csbyte;
+    for(int i = 0; i < 16; i += 8) {
+        bool_byte[i] = csb[i];
+        if(i % 8 == 1) {
+            csbyte = to_byte(bool_byte);
+            byte_num = (i + 1)/8 + 3;
+        }
+        header[byte_num] = csbyte;
+    }
+    
+    vector<unsigned char> all;
+    all.reserve(header.size() + data.size());
+    all.insert(all.end(), header.begin(), header.end());
+    all.insert(all.end(), data.begin(), data.end());
+    return all;
 }
 
-bool Sender::read_response(unsigned int seq_num, string response) {
-
+bool Sender::read_response(unsigned int seq_num, unsigned char* response) {
+    bool all[32];
+    for(int i = 0; i < 4; i++) {
+        std::bitset<8> bset(response[i]);
+        for(int j = i * 8; j < 8*(i+1); j++)
+            all[j] = bset[j % 8];
+    }
+    int ans = bitArrayToInt32(all, 32);
+    //cout << "bit array converted: " << std::to_string(ans) << " seq num " << std::to_string(seq_num)  <<  std::endl;
+    return ans == seq_num;
 }
 
 void Sender::send_file(const char* host) {
     int sock = 0;
     struct sockaddr_in serv_addr;
-    int length = 1024;
-    char res_buf[1024] = {0};
+    int length = 8;
+    unsigned char res_buf[8] = {0};
     if((sock = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
         std::cout << "\n Socket creation error \n";
         exit(EXIT_FAILURE);
@@ -95,7 +206,7 @@ void Sender::send_file(const char* host) {
         std::cout << "\nInvalid address/ Address not supported \n";
         exit(EXIT_FAILURE);
     }
-
+    
     size_t file_size = buffer.size();
     size_t file_pos = 0;
     int next_iteration = 1;
@@ -106,24 +217,28 @@ void Sender::send_file(const char* host) {
         lock.unlock();
         ++next_iteration;
         Segment segment;
+        vector<unsigned char> req_str;
         if(!establish) {
-            std::vector<char> file_chunk;
+            std::vector<unsigned char> file_chunk;
             if(file_pos + mss < file_size) {
-                std::vector<char> file_chunk(buffer.begin() + file_pos, buffer.begin() + file_pos + mss);
+                std::vector<unsigned char> file_chunk(buffer.begin() + file_pos, buffer.begin() + file_pos + mss);
                 file_pos += mss;
             }
             else {
-                std::vector<char> file_chunk(buffer.begin() + file_pos, buffer.end());
+                std::vector<unsigned char> file_chunk(buffer.begin() + file_pos, buffer.end());
                 file_pos = file_size;
             }
-            segment = create_segment(file_chunk, port, file_pos - mss);
+            segment.seq_num = file_pos - mss;
+            segment.data = file_chunk;
+            req_str = segment.to_bytes(false, mss);
+            //segment = create_segment(file_chunk, file_pos - mss);
         }
         else {
-            string data_str = "MSS: " + std::to_string(mss);
-            std::vector<char> mss_data(data_str.begin(), data_str.end());
-            segment = create_segment(mss_data, port, 0);
+            segment.seq_num = 0;
+            req_str = segment.to_bytes(true, mss);
+            //segment = create_segment(mss_data, 0);
         }
-
+        
         bool is_ack = false, timed_out = false;
         std::chrono::high_resolution_clock::time_point start_time, end_time;
         long duration = 0;
@@ -132,32 +247,32 @@ void Sender::send_file(const char* host) {
                 std::cout << "\n Connection failed \n";
                 exit(EXIT_FAILURE);
             }
-            string req_str = segment.to_string();
-            const char* req = req_str.c_str();
-            send(sock, req, strlen(req), 0);
+            //vector<unsigned char> req_str = segment.to_bytes();
+            const unsigned char* req = req_str.data();
+            cout << "about to send data " << std::to_string(segment.seq_num) << "\n";
+            send(sock, req, req_str.size(), 0);
+            cout << "sent data\n";
             start_time = std::chrono::high_resolution_clock::now();
             bzero(res_buf, length);
-            int block_sz = 0;
-            std::string res = "";
-            while((block_sz = read(sock, res_buf, length)) > 0) {
-                std::string chunk(res_buf);
-                res += chunk;
+            cout << "about to read ack\n";
+            int block_sz = read(sock, res_buf, length);
+            cout << "read ack\n";
+            //if(block_sz == 0 || block_sz != length)
+            //    break;
+            end_time = std::chrono::high_resolution_clock::now();
+            duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time).count();
+            cout << "block sz " << std::to_string(block_sz) << " duration " << std::to_string(duration) << std::endl;
+            if(duration > timeout)
+                timed_out = true;
+            if(timed_out || errno == ETIMEDOUT || errno == EWOULDBLOCK || block_sz < 0) {
+                std::cout << "time out/error occurred on read\n";
                 bzero(res_buf, length);
-                if(block_sz == 0 || block_sz != length)
-                    break;
-                end_time = std::chrono::high_resolution_clock::now();
-                duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time).count();
-                if(duration > timeout) {
-                    timed_out = true;
-                    break;
-                }
-            }            
-            if(timed_out || errno == ETIMEDOUT || errno == EWOULDBLOCK) {
-                std::cout << "time out occurred on read\n";
                 continue;
             }
-            is_ack = read_response(segment.seq_num, res);            
+            is_ack = read_response(segment.seq_num, res_buf);
+            bzero(res_buf, length);
         }
+        establish = false;
         lock.lock();
         if(--worker_count == 0) {
             lock.unlock();

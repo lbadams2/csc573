@@ -14,18 +14,20 @@
 #include <mutex>
 #include <thread>
 #include <condition_variable>
+#include <bitset>
 
 #define RECEIVER_PORT 7735
-typedef std::string string;
+using std::string;
+using std::cout;
+using std::vector;
 
 struct Segment {
     unsigned int seq_num;
-    uint16_t source_port;
-    uint16_t dest_port;
-    uint16_t length;
+    static unsigned char type[2];
     uint16_t checksum;
-    std::vector<char> data;
-    string to_string() const;
+    std::vector<unsigned char> data;
+    vector<unsigned char> to_bytes(bool mss_segment, uint16_t mss);
+    static void init_type();
 };
 
 class Sender {
@@ -39,16 +41,36 @@ public:
     std::mutex mrun;
     std::condition_variable main_ready;
     std::condition_variable iteration_complete;
-private:    
+private:
     std::vector<string> hosts;
     const uint16_t port;
     const string file_name;
     const uint16_t mss;
     const long timeout;
-    std::vector<char> buffer;
+    std::vector<unsigned char> buffer;
     std::vector<int> files_sent;
-    Segment create_segment(std::vector<char> &data, const uint16_t port, unsigned int seq_num);
-    bool read_response(unsigned int seq_num, string response);
+    //Segment create_segment(std::vector<unsigned char> &data, unsigned int seq_num);
+    bool read_response(unsigned int seq_num, unsigned char* res);
 };
+
+static inline int bitArrayToInt32(bool arr[], int count)
+{
+    int ret = 0;
+    int tmp;
+    for (int i = 0; i < count; i++) {
+        tmp = arr[i];
+        ret |= tmp << (count - i - 1);
+    }
+    return ret;
+}
+
+static inline unsigned char to_byte(bool b[8])
+{
+    unsigned char c = 0;
+    for (int i=0; i < 8; ++i)
+        if (b[i])
+            c |= 1 << i;
+    return c;
+}
 
 #endif /* Sender_h */

@@ -7,11 +7,15 @@
 #include <sstream>
 #include <vector>
 #include <unistd.h>
+#include <iostream>
+#include <fstream>
+#include <random>
 
 #define PORT 7735
 #define VALID_CHECKSUM 65535
-#define HEADER_SIZE 86
-typedef std::string string;
+#define HEADER_SIZE 8
+using std::cout;
+using std::string;
 typedef std::unordered_map<std::string, std::string> umap;
 
 struct ACK_Segment {
@@ -23,9 +27,10 @@ struct ACK_Segment {
 
 class Receiver {
 public:
+    Receiver(string file_name, double loss_prob);
     umap read_segment(string segment, bool set_mss);
     void download_file();
-    void send_ack(umap &seg_map);
+    unsigned char* get_ack( );
 private:
     bool validate_checksum(uint16_t checksum, umap &seg_map);
     void set_mss(string data);
@@ -51,8 +56,9 @@ static inline void from_byte(unsigned char c, bool b[8])
         b[i] = (c & (1<<i)) != 0;
 }
 
-static inline bool* int_to_bool(int x) {
-  bool ret[32];
+/*
+static inline bool* int_to_bool(int x, bool ret[32]) {
+  bool* ret = new bool[32];
   int  i = 0;
   while(x) {
     if (x&1)
@@ -64,6 +70,7 @@ static inline bool* int_to_bool(int x) {
   std::reverse(std::begin(ret),std::end(ret));
   return ret;
 }
+*/
 
 static inline int bitArrayToInt32(bool arr[], int count)
 {
