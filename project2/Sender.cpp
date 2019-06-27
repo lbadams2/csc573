@@ -65,7 +65,7 @@ Segment Sender::create_segment(std::vector<unsigned char> &data, unsigned int se
 
 vector<unsigned char> Segment::to_bytes(bool mss_segment, uint16_t mss) {
     // convert seq num to bool
-    bool snb[32];
+    bool snb[32] = {false};
     int  i = 0;
     unsigned int sn = seq_num;
     while(sn) {
@@ -81,13 +81,15 @@ vector<unsigned char> Segment::to_bytes(bool mss_segment, uint16_t mss) {
     bool bool_byte[8];
     unsigned char seg_byte;
     int byte_num = 0;
-    for(int i = 0; i < 32; i += 8) {
+    for(int i = 0; i < 32; i++) {
         bool_byte[i] = snb[i];
-        if(i % 8 == 1) {
+        if(i % 8 == 7) {
             seg_byte = to_byte(bool_byte);
+            if(seg_byte == '\0')
+                seg_byte = '0';
             byte_num = (i + 1)/8;
+            header[byte_num - 1] = seg_byte;
         }
-        header[byte_num - 1] = seg_byte;
     }
     header[6] = type[0];
     header[7] = type[1];
@@ -105,9 +107,8 @@ vector<unsigned char> Segment::to_bytes(bool mss_segment, uint16_t mss) {
     concat = concat | header[7];
     sum += concat;
     if(mss_segment) {
-        vector<unsigned char> mss_data;
-        mss_data.reserve(2);
-        bool mssb[16];
+        vector<unsigned char> mss_data(2);
+        bool mssb[16] = {false};
         i = 0;
         uint16_t m = mss;
         while(m) {
@@ -121,13 +122,15 @@ vector<unsigned char> Segment::to_bytes(bool mss_segment, uint16_t mss) {
         std::reverse(std::begin(mssb),std::end(mssb));
         byte_num = 0;
         unsigned char mssbyte;
-        for(int i = 0; i < 16; i += 8) {
-            bool_byte[i] = mssb[i];
-            if(i % 8 == 1) {
+        for(int i = 0; i < 16; i++) {
+            bool_byte[i % 8] = mssb[i];
+            if(i % 8 == 7) {
                 mssbyte = to_byte(bool_byte);
-                byte_num = (i + 1)/8 + 3;
+                if(mssbyte == '\0')
+                    mssbyte = '0';
+                byte_num = (i + 1)/8 - 1;
+                mss_data[byte_num] = mssbyte;
             }
-            mss_data[byte_num] = mssbyte;
         }
         data = mss_data;
     }
@@ -142,7 +145,7 @@ vector<unsigned char> Segment::to_bytes(bool mss_segment, uint16_t mss) {
     }
     checksum = ~sum;
     
-    bool csb[16];
+    bool csb[16] = {false};
     i = 0;
     uint16_t cs = checksum;
     while(cs) {
@@ -156,16 +159,19 @@ vector<unsigned char> Segment::to_bytes(bool mss_segment, uint16_t mss) {
     std::reverse(std::begin(csb),std::end(csb));
     byte_num = 0;
     unsigned char csbyte;
-    for(int i = 0; i < 16; i += 8) {
-        bool_byte[i] = csb[i];
-        if(i % 8 == 1) {
+    for(int i = 0; i < 16; i++) {
+        bool_byte[i % 8] = csb[i];
+        if(i % 8 == 7) {
             csbyte = to_byte(bool_byte);
+            if(csbyte == '\0')
+                csbyte = '0';
             byte_num = (i + 1)/8 + 3;
+            header[byte_num] = csbyte;
         }
-        header[byte_num] = csbyte;
     }
     
     vector<unsigned char> all;
+    cout << "header size " << std::to_string(header.size()) << " data size " << std::to_string(data.size()) << "\n";
     all.reserve(header.size() + data.size());
     all.insert(all.end(), header.begin(), header.end());
     all.insert(all.end(), data.begin(), data.end());
@@ -173,7 +179,7 @@ vector<unsigned char> Segment::to_bytes(bool mss_segment, uint16_t mss) {
 }
 
 bool Sender::read_response(unsigned int seq_num, unsigned char* response) {
-    bool all[32];
+    bool all[32] = {false};
     for(int i = 0; i < 4; i++) {
         std::bitset<8> bset(response[i]);
         for(int j = i * 8; j < 8*(i+1); j++)
@@ -249,7 +255,7 @@ void Sender::send_file(const char* host) {
             }
             //vector<unsigned char> req_str = segment.to_bytes();
             const unsigned char* req = req_str.data();
-            cout << "about to send data " << std::to_string(segment.seq_num) << "\n";
+            cout << "about to send data " << std::to_string(segment.seq_num) << " bytes " << std::to_string(req_str.size()) << "\n";
             send(sock, req, req_str.size(), 0);
             cout << "sent data\n";
             start_time = std::chrono::high_resolution_clock::now();

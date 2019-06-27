@@ -10,12 +10,14 @@
 #include <iostream>
 #include <fstream>
 #include <random>
+#include <bitset>
 
 #define PORT 7735
 #define VALID_CHECKSUM 65535
 #define HEADER_SIZE 8
 using std::cout;
 using std::string;
+using std::vector;
 typedef std::unordered_map<std::string, std::string> umap;
 
 struct ACK_Segment {
@@ -28,12 +30,11 @@ struct ACK_Segment {
 class Receiver {
 public:
     Receiver(string file_name, double loss_prob);
-    umap read_segment(string segment, bool set_mss);
+    umap read_segment(unsigned char* segment, ssize_t num_bytes, bool is_set_mss);
     void download_file();
     unsigned char* get_ack( );
 private:
-    bool validate_checksum(uint16_t checksum, umap &seg_map);
-    void set_mss(string data);
+    bool validate_checksum(unsigned char* segment, ssize_t num_bytes);
     string file_contents;
     string file_name;
     uint16_t next_seq_num;
