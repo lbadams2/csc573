@@ -20,14 +20,26 @@ void ACK_Segment::init_static() {
 
 Receiver::Receiver(string fn, double lp): file_name(fn), loss_prob(lp), mss(0), next_seq_num(0) {}
 
-umap Receiver::read_segment(unsigned char* segment, ssize_t num_bytes, bool is_set_mss) {
-    umap map;
+void Receiver::add_nulls(unsigned char* segment, bool is_set_mss) {
     if(is_set_mss) {
         if(segment[8] == '0')
             segment[8] = '\0';
         if(segment[9] == '0')
             segment[9] = '\0';
     }
+    for(int i = 0; i < 4; i++) {
+        if(segment[i] == '0')
+            segment[i] = '\0';
+    }
+    if(segment[4] == '0')
+        segment[4] = '\0';
+    if(segment[5] == '0')
+        segment[5] = '\0';
+}
+
+umap Receiver::read_segment(unsigned char* segment, ssize_t num_bytes, bool is_set_mss) {
+    umap map;
+    add_nulls(segment, is_set_mss);
     bool is_valid = validate_checksum(segment, num_bytes);
     if(is_valid)
         map["checksum_valid"] = "true";
@@ -35,12 +47,10 @@ umap Receiver::read_segment(unsigned char* segment, ssize_t num_bytes, bool is_s
         map["checksum_valid"] = "false";
         return map;
     }
-
+    
     bool bits[32] = {false};
     for(int i = 0; i < 4; i++) {
         unsigned char c = segment[i];
-        if(c == '0')
-            c = '\0';
         std::bitset<8> bset(c);
         for(int j = i * 8; j < 8*(i+1); j++)
             bits[j] = bset[j % 8];
@@ -55,7 +65,7 @@ umap Receiver::read_segment(unsigned char* segment, ssize_t num_bytes, bool is_s
         map["in_order"] = "false";
         return map;
     }
-
+    
     //vector<unsigned char> data_bytes;
     string data_str;
     for(int i = 8; i < num_bytes; i++) {
@@ -70,19 +80,19 @@ umap Receiver::read_segment(unsigned char* segment, ssize_t num_bytes, bool is_s
 }
 
 bool Receiver::validate_checksum(unsigned char* segment, ssize_t num_bytes) {
-    uint16_t checksum;
-    if(segment[4] == '0')
-        segment[4] = '\0';
-    if(segment[5] == '0')
-        segment[5] = '\0';
-    checksum = segment[4];
-    checksum = checksum << 8;
-    checksum = checksum | segment[5];
-    uint16_t concat;
-    uint16_t sum;
+    bool all[16] = {false};
+    std::bitset<8> bits = segment[4];
+    for(int i = 0; i < 8; i++)
+        all[i] = bits[i];
+    bits = segment[5];
+    for(int i = 8; i < 16; i++)
+        all[i] = bits[i % 8];
+    uint16_t checksum = bitArrayToInt32(all, 16);
+    uint16_t concat = 0;
+    uint16_t sum = 0;
     for(int i = 0; i < 4; i += 2) {
-        if(segment[i] == '0')
-            segment[i] = '\0';
+        //if(segment[i] == '0')
+        //    segment[i] = '\0';
         concat = segment[i];
         concat = concat << 8;
         concat = concat | segment[i + 1];
@@ -101,10 +111,11 @@ bool Receiver::validate_checksum(unsigned char* segment, ssize_t num_bytes) {
         sum += concat;
     }
     uint16_t val = sum + checksum;
+    cout << "Sum " << std::to_string(val)  << " checksum " << std::to_string(checksum) << "\n";
     return val == VALID_CHECKSUM;
 }
 
-unsigned char* Receiver::get_ack() {    
+unsigned char* Receiver::get_ack() {
     // convert seq num to bool
     bool snb[32] = {false};
     int  i = 0;
@@ -123,9 +134,9 @@ unsigned char* Receiver::get_ack() {
     int byte_num = 0;
     for(int i = 0; i < 32; i += 8) {
         bool_byte[i] = snb[i];
-        if(i % 8 == 1) {      
-             seg_byte = to_byte(bool_byte);
-             byte_num = (i + 1)/8;
+        if(i % 8 == 1) {
+            seg_byte = to_byte(bool_byte);
+            byte_num = (i + 1)/8;
         }
         ack_bytes[byte_num - 1] = seg_byte;
     }
@@ -134,7 +145,7 @@ unsigned char* Receiver::get_ack() {
     ack_bytes[6] = ACK_Segment::type[0];
     ack_bytes[7] = ACK_Segment::type[1];
     return ack_bytes;
-    //string ack_str = "Seq num: " + seq_bytes + "\r\n" + ACK_Segment::zeroes + "\r\n" + ACK_Segment::type + "\r\n"; 
+    //string ack_str = "Seq num: " + seq_bytes + "\r\n" + ACK_Segment::zeroes + "\r\n" + ACK_Segment::type + "\r\n";
 }
 
 void Receiver::download_file() {
@@ -152,11 +163,11 @@ void Receiver::download_file() {
         perror("socket failed");
         exit(EXIT_FAILURE);
     }
-
+    
     address.sin_family = AF_INET;
     address.sin_addr.s_addr = INADDR_ANY;
     address.sin_port = htons(PORT);
-
+    
     // bind socket to port
     bzero(buffer, segment_size);
     ssize_t block_sz = 0;
@@ -165,19 +176,19 @@ void Receiver::download_file() {
         perror("bind failed");
         exit(EXIT_FAILURE);
     }
-    /* 
-    if (listen(server_fd, 3) < 0) 
-    { 
-        perror("listen"); 
-        exit(EXIT_FAILURE); 
-    }
-    if ((new_socket = accept(server_fd, (struct sockaddr *)&address,  
-                       (socklen_t*)&addrlen))<0) 
-    { 
-        perror("accept"); 
-        exit(EXIT_FAILURE); 
-    } 
-    */
+    /*
+     if (listen(server_fd, 3) < 0)
+     {
+     perror("listen");
+     exit(EXIT_FAILURE);
+     }
+     if ((new_socket = accept(server_fd, (struct sockaddr *)&address,
+     (socklen_t*)&addrlen))<0)
+     {
+     perror("accept");
+     exit(EXIT_FAILURE);
+     }
+     */
     while(true) {
         while((block_sz = read(server_fd, buffer, segment_size)) > 0) {
             cout << "Received data - bytes " << std::to_string(block_sz) << "\n";
@@ -217,7 +228,7 @@ void Receiver::download_file() {
                     out << data;
                     out.close();
                     unsigned char* ack = get_ack();
-                    send(new_socket, ack, 8, 0);                    
+                    send(new_socket, ack, 8, 0);
                     delete[] ack;
                 }
                 else {

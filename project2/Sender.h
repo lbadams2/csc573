@@ -27,6 +27,7 @@ struct Segment {
     uint16_t checksum;
     std::vector<unsigned char> data;
     vector<unsigned char> to_bytes(bool mss_segment, uint16_t mss);
+    void remove_nulls(vector<unsigned char>& v, bool is_set_mss);
     static void init_type();
 };
 

@@ -35,6 +35,7 @@ public:
     unsigned char* get_ack( );
 private:
     bool validate_checksum(unsigned char* segment, ssize_t num_bytes);
+    void add_nulls(unsigned char* segment, bool is_set_mss);
     string file_contents;
     string file_name;
     uint16_t next_seq_num;
@@ -58,20 +59,20 @@ static inline void from_byte(unsigned char c, bool b[8])
 }
 
 /*
-static inline bool* int_to_bool(int x, bool ret[32]) {
-  bool* ret = new bool[32];
-  int  i = 0;
-  while(x) {
-    if (x&1)
-      ret[i] = 1;
-    else
-      ret[i] = 0;
-    x>>=1;  
-  }
-  std::reverse(std::begin(ret),std::end(ret));
-  return ret;
-}
-*/
+ static inline bool* int_to_bool(int x, bool ret[32]) {
+ bool* ret = new bool[32];
+ int  i = 0;
+ while(x) {
+ if (x&1)
+ ret[i] = 1;
+ else
+ ret[i] = 0;
+ x>>=1;
+ }
+ std::reverse(std::begin(ret),std::end(ret));
+ return ret;
+ }
+ */
 
 static inline int bitArrayToInt32(bool arr[], int count)
 {

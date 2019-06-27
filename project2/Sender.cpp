@@ -85,8 +85,8 @@ vector<unsigned char> Segment::to_bytes(bool mss_segment, uint16_t mss) {
         bool_byte[i] = snb[i];
         if(i % 8 == 7) {
             seg_byte = to_byte(bool_byte);
-            if(seg_byte == '\0')
-                seg_byte = '0';
+            //if(seg_byte == '\0')
+            //    seg_byte = '0';
             byte_num = (i + 1)/8;
             header[byte_num - 1] = seg_byte;
         }
@@ -94,8 +94,8 @@ vector<unsigned char> Segment::to_bytes(bool mss_segment, uint16_t mss) {
     header[6] = type[0];
     header[7] = type[1];
     
-    uint16_t concat;
-    uint16_t sum;
+    uint16_t concat = 0;
+    uint16_t sum = 0;
     for(int i = 0; i < 4; i += 2) {
         concat = header[i];
         concat = concat << 8;
@@ -126,8 +126,8 @@ vector<unsigned char> Segment::to_bytes(bool mss_segment, uint16_t mss) {
             bool_byte[i % 8] = mssb[i];
             if(i % 8 == 7) {
                 mssbyte = to_byte(bool_byte);
-                if(mssbyte == '\0')
-                    mssbyte = '0';
+                //if(mssbyte == '\0')
+                //    mssbyte = '0';
                 byte_num = (i + 1)/8 - 1;
                 mss_data[byte_num] = mssbyte;
             }
@@ -163,8 +163,8 @@ vector<unsigned char> Segment::to_bytes(bool mss_segment, uint16_t mss) {
         bool_byte[i % 8] = csb[i];
         if(i % 8 == 7) {
             csbyte = to_byte(bool_byte);
-            if(csbyte == '\0')
-                csbyte = '0';
+            //if(csbyte == '\0')
+            //    csbyte = '0';
             byte_num = (i + 1)/8 + 3;
             header[byte_num] = csbyte;
         }
@@ -175,7 +175,24 @@ vector<unsigned char> Segment::to_bytes(bool mss_segment, uint16_t mss) {
     all.reserve(header.size() + data.size());
     all.insert(all.end(), header.begin(), header.end());
     all.insert(all.end(), data.begin(), data.end());
+    remove_nulls(all, mss_segment);
     return all;
+}
+
+void Segment::remove_nulls(vector<unsigned char>& v, bool is_set_mss) {
+    if(is_set_mss){
+        auto it = v.begin();
+        while(it != v.end()) {
+            if(*it == '\0')
+                *it = '0';
+            it++;
+        }
+    }
+    else {
+        for(auto it = v.begin(); it < it + 8; it++)
+            if(*it == '\0')
+                *it = '0';
+    }
 }
 
 bool Sender::read_response(unsigned int seq_num, unsigned char* response) {
@@ -254,7 +271,8 @@ void Sender::send_file(const char* host) {
                 exit(EXIT_FAILURE);
             }
             //vector<unsigned char> req_str = segment.to_bytes();
-            const unsigned char* req = req_str.data();
+            unsigned char* req = req_str.data();
+            //validate_checksum(req, req_str.size());
             cout << "about to send data " << std::to_string(segment.seq_num) << " bytes " << std::to_string(req_str.size()) << "\n";
             send(sock, req, req_str.size(), 0);
             cout << "sent data\n";
