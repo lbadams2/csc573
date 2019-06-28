@@ -20,6 +20,7 @@
 using std::string;
 using std::cout;
 using std::vector;
+using std::to_string;
 
 struct Segment {
     unsigned int seq_num;
@@ -52,6 +53,7 @@ private:
     std::vector<int> files_sent;
     //Segment create_segment(std::vector<unsigned char> &data, unsigned int seq_num);
     bool read_response(unsigned int seq_num, unsigned char* res);
+    void add_nulls(unsigned char* segment);
 };
 
 static inline int bitArrayToInt32(bool arr[], int count)

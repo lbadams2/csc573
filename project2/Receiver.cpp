@@ -66,16 +66,26 @@ umap Receiver::read_segment(unsigned char* segment, ssize_t num_bytes, bool is_s
         return map;
     }
     
-    //vector<unsigned char> data_bytes;
-    string data_str;
-    for(int i = 8; i < num_bytes; i++) {
-        char c = (char)segment[i];
-        data_str += c;
+    if(is_set_mss) {
+        bool all[16] = {false};
+        std::bitset<8> bits = segment[8];
+        for(int i = 0; i < 8; i++)
+            all[i] = bits[i];
+        bits = segment[9];
+        for(int i = 8; i < 16; i++)
+            all[i] = bits[i % 8];
+        mss = bitArrayToInt32(all, 16);
+        cout << "mss is " <<  to_string(mss) << "\n";
     }
-    map["data"] = data_str;
+    else {
+        string data_str;
+        for(int i = 8; i < num_bytes; i++) {
+            char c = (char)segment[i];
+            data_str += c;
+        }
+        map["data"] = data_str;
+    }
     
-    if(is_set_mss)
-        mss = stoi(data_str);
     return map;
 }
 
@@ -88,6 +98,7 @@ bool Receiver::validate_checksum(unsigned char* segment, ssize_t num_bytes) {
     for(int i = 8; i < 16; i++)
         all[i] = bits[i % 8];
     uint16_t checksum = bitArrayToInt32(all, 16);
+    cout << "checksum " << to_string(checksum) << "\n";
     uint16_t concat = 0;
     uint16_t sum = 0;
     for(int i = 0; i < 4; i += 2) {
@@ -98,10 +109,12 @@ bool Receiver::validate_checksum(unsigned char* segment, ssize_t num_bytes) {
         concat = concat | segment[i + 1];
         sum += concat;
     }
+    cout << "seg sum " << to_string(sum) << "\n";
     concat = segment[6];
     concat = concat << 8;
     concat = concat | segment[7];
     sum += concat;
+    cout << "sum with type " << to_string(sum) << "\n";
     for(int i = 8; i < num_bytes; i++) {
         concat = segment[i];
         if( ++i == num_bytes)
@@ -110,25 +123,27 @@ bool Receiver::validate_checksum(unsigned char* segment, ssize_t num_bytes) {
             concat = (concat << 8) | segment[i];
         sum += concat;
     }
+    cout << "sum with data " << to_string(sum) << "\n";
     uint16_t val = sum + checksum;
-    cout << "Sum " << std::to_string(val)  << " checksum " << std::to_string(checksum) << "\n";
+    cout << "Sum plus checksum " << std::to_string(val) << "\n";
     return val == VALID_CHECKSUM;
 }
 
-unsigned char* Receiver::get_ack() {
+vector<unsigned char> Receiver::get_ack() {
     // convert seq num to bool
     bool snb[32] = {false};
     int  i = 0;
-    while(next_seq_num) {
-        if (next_seq_num&1)
+    uint16_t ns = next_seq_num;
+    while(ns) {
+        if (ns&1)
             snb[i] = 1;
         else
             snb[i] = 0;
-        next_seq_num>>=1;
+        ns>>=1;
         i++;
     }
     std::reverse(std::begin(snb),std::end(snb));
-    unsigned char* ack_bytes = new unsigned char[8];
+    vector<unsigned char> ack_bytes(8);
     bool bool_byte[8] = {false};
     unsigned char seg_byte;
     int byte_num = 0;
@@ -148,10 +163,18 @@ unsigned char* Receiver::get_ack() {
     //string ack_str = "Seq num: " + seq_bytes + "\r\n" + ACK_Segment::zeroes + "\r\n" + ACK_Segment::type + "\r\n";
 }
 
+void Receiver::remove_nulls(vector<unsigned char>& v) {
+    auto it = v.begin();
+    while(it != v.end()) {
+        if(*it == '\0')
+            *it = '0';
+        it++;
+    }
+}
+
 void Receiver::download_file() {
     int server_fd, new_socket;
-    struct sockaddr_in address;
-    int addrlen = sizeof(address);
+    struct sockaddr_in serv_addr, cli_addr;
     int segment_size = 20;
     umap seg_map;
     unsigned char buffer[20] = {0};
@@ -163,34 +186,24 @@ void Receiver::download_file() {
         perror("socket failed");
         exit(EXIT_FAILURE);
     }
+    memset(&serv_addr, 0, sizeof(serv_addr));
+    memset(&cli_addr, 0, sizeof(cli_addr));
     
-    address.sin_family = AF_INET;
-    address.sin_addr.s_addr = INADDR_ANY;
-    address.sin_port = htons(PORT);
+    serv_addr.sin_family = AF_INET;
+    serv_addr.sin_addr.s_addr = INADDR_ANY;
+    serv_addr.sin_port = htons(PORT);
     
     // bind socket to port
     bzero(buffer, segment_size);
     ssize_t block_sz = 0;
+    unsigned int len = 0;
     bool is_set_mss = true;
-    if(bind(server_fd, (struct sockaddr *) &address, sizeof(address)) < 0) {
+    if(bind(server_fd, (struct sockaddr *) &serv_addr, sizeof(serv_addr)) < 0) {
         perror("bind failed");
         exit(EXIT_FAILURE);
     }
-    /*
-     if (listen(server_fd, 3) < 0)
-     {
-     perror("listen");
-     exit(EXIT_FAILURE);
-     }
-     if ((new_socket = accept(server_fd, (struct sockaddr *)&address,
-     (socklen_t*)&addrlen))<0)
-     {
-     perror("accept");
-     exit(EXIT_FAILURE);
-     }
-     */
     while(true) {
-        while((block_sz = read(server_fd, buffer, segment_size)) > 0) {
+        while((block_sz = recvfrom(server_fd, buffer, segment_size, 0, ( struct sockaddr *) &cli_addr, &len)) > 0) {
             cout << "Received data - bytes " << std::to_string(block_sz) << "\n";
             double rand_val = dis(gen);
             if(rand_val <= loss_prob)
@@ -198,9 +211,10 @@ void Receiver::download_file() {
             //string segment(buffer);
             if(is_set_mss) {
                 seg_map = read_segment(buffer, block_sz, true);
-                cout << "incoming segment set mss true - seq num " << seg_map["seq_num"] << std::endl;
-                segment_size = mss + HEADER_SIZE;
-                buffer[segment_size] = {0};
+                if(seg_map["checksum_valid"] == "true") {
+                    segment_size = mss + HEADER_SIZE;
+                    buffer[segment_size] = {0};
+                }
                 //is_set_mss = false;
             }
             else {
@@ -209,15 +223,18 @@ void Receiver::download_file() {
                     break;
                 }
                 seg_map = read_segment(buffer, block_sz, false);
-                cout << "incoming segment set mss false - seq num " << seg_map["seq_num"] << std::endl;
             }
             bzero(buffer, segment_size);
             if(seg_map["checksum_valid"] == "false")
                 cout << "invalid checksum\n";
             else if(is_set_mss) {
-                unsigned char* ack = get_ack();
-                send(new_socket, ack, 8, 0);
-                delete[] ack;
+                vector<unsigned char> ack = get_ack();
+                remove_nulls(ack);
+                unsigned char* ack_bytes = ack.data();
+                cout << "about to send ack size " << ack.size() << "\n";
+                ssize_t val = sendto(server_fd, ack_bytes, 8, 0, (const struct sockaddr *) &cli_addr, len);
+                cout << "sent ack " << to_string(val) << "\n";
+                //send(new_socket, ack, 8, 0);
                 is_set_mss = false;
             }
             else {
@@ -227,15 +244,11 @@ void Receiver::download_file() {
                     out.open(file_name, std::ios_base::app);
                     out << data;
                     out.close();
-                    unsigned char* ack = get_ack();
-                    send(new_socket, ack, 8, 0);
-                    delete[] ack;
                 }
-                else {
-                    unsigned char* ack = get_ack();
-                    send(new_socket, ack, 8, 0);
-                    delete[] ack;
-                }
+                vector<unsigned char> ack = get_ack();
+                unsigned char* ack_bytes = ack.data();
+                sendto(server_fd, ack_bytes, 8, 0, (const struct sockaddr *) &cli_addr, len);
+                //send(new_socket, ack, 8, 0);
             }
         }
     }

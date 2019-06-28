@@ -18,6 +18,7 @@
 using std::cout;
 using std::string;
 using std::vector;
+using std::to_string;
 typedef std::unordered_map<std::string, std::string> umap;
 
 struct ACK_Segment {
@@ -32,10 +33,11 @@ public:
     Receiver(string file_name, double loss_prob);
     umap read_segment(unsigned char* segment, ssize_t num_bytes, bool is_set_mss);
     void download_file();
-    unsigned char* get_ack( );
+    vector<unsigned char> get_ack();
 private:
     bool validate_checksum(unsigned char* segment, ssize_t num_bytes);
     void add_nulls(unsigned char* segment, bool is_set_mss);
+    void remove_nulls(vector<unsigned char>& v);
     string file_contents;
     string file_name;
     uint16_t next_seq_num;
