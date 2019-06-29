@@ -43,24 +43,24 @@ std::vector<int>& Sender::get_files_sent() {return files_sent;}
  */
 
 /*
-Segment Sender::create_segment(std::vector<unsigned char> &data, unsigned int seq_num) {
-    Segment segment;
-    segment.seq_num = seq_num;
-    segment.checksum = segment.dest_port + segment.source_port + segment.length;
-    uint16_t concat;
-    for(auto it = data.begin(); it < data.end(); it++) {
-        concat = *it;
-        it++;
-        if(it == data.end())
-            concat = concat << 8;
-        else
-            concat = (concat << 8) | *it;
-        segment.checksum += concat;
-    }
-    segment.checksum = ~segment.checksum;
-    segment.data = data;
-    return segment;
-}
+ Segment Sender::create_segment(std::vector<unsigned char> &data, unsigned int seq_num) {
+ Segment segment;
+ segment.seq_num = seq_num;
+ segment.checksum = segment.dest_port + segment.source_port + segment.length;
+ uint16_t concat;
+ for(auto it = data.begin(); it < data.end(); it++) {
+ concat = *it;
+ it++;
+ if(it == data.end())
+ concat = concat << 8;
+ else
+ concat = (concat << 8) | *it;
+ segment.checksum += concat;
+ }
+ segment.checksum = ~segment.checksum;
+ segment.data = data;
+ return segment;
+ }
  */
 
 vector<unsigned char> Segment::to_bytes(bool mss_segment, uint16_t mss) {
@@ -231,7 +231,7 @@ void Sender::send_file(const char* host) {
     struct timeval tv;
     tv.tv_sec = timeout;
     tv.tv_usec = 0;
-    //setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, (const char*)&tv, sizeof tv);
+    setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, (const char*)&tv, sizeof tv);
     
     // copy 0 into serv_addr members
     memset(&serv_addr, '0', sizeof(serv_addr));
@@ -239,10 +239,10 @@ void Sender::send_file(const char* host) {
     serv_addr.sin_port = htons(port);
     serv_addr.sin_addr.s_addr = INADDR_ANY;
     /*
-    if(inet_pton(AF_INET, host, &serv_addr.sin_addr) <= 0) {
-        std::cout << "\nInvalid address/ Address not supported \n";
-        exit(EXIT_FAILURE);
-    }
+     if(inet_pton(AF_INET, host, &serv_addr.sin_addr) <= 0) {
+     std::cout << "\nInvalid address/ Address not supported \n";
+     exit(EXIT_FAILURE);
+     }
      */
     
     size_t file_size = buffer.size();
@@ -260,17 +260,17 @@ void Sender::send_file(const char* host) {
         Segment segment;
         vector<unsigned char> req_str;
         if(!establish) {
-            std::vector<unsigned char> file_chunk;
             if(file_pos + mss < file_size) {
                 std::vector<unsigned char> file_chunk(buffer.begin() + file_pos, buffer.begin() + file_pos + mss);
+                segment.data = file_chunk;
                 file_pos += mss;
             }
             else {
                 std::vector<unsigned char> file_chunk(buffer.begin() + file_pos, buffer.end());
+                segment.data = file_chunk;
                 file_pos = file_size;
             }
             segment.seq_num = file_pos - mss;
-            segment.data = file_chunk;
             req_str = segment.to_bytes(false, mss);
             //segment = create_segment(file_chunk, file_pos - mss);
         }
@@ -288,15 +288,14 @@ void Sender::send_file(const char* host) {
         unsigned int len = 0;
         while(!is_ack) {
             /*
-            if(connect(sock, (struct sockaddr *) &serv_addr, sizeof(serv_addr)) < 0) {
-                std::cout << "\n Connection failed \n";
-                exit(EXIT_FAILURE);
-            }
+             if(connect(sock, (struct sockaddr *) &serv_addr, sizeof(serv_addr)) < 0) {
+             std::cout << "\n Connection failed \n";
+             exit(EXIT_FAILURE);
+             }
              */
             //vector<unsigned char> req_str = segment.to_bytes();
             //validate_checksum(req, req_str.size());
             cout << "about to send data " << std::to_string(segment.seq_num) << " bytes " << std::to_string(num_bytes) << "\n";
-            cout << "vector size " << to_string(req_str.size()) << "\n";
             sendto(sock, req, num_bytes, 0, (const struct sockaddr *) &serv_addr, sizeof(serv_addr));
             //send(sock, req, num_bytes, 0);
             cout << "sent data\n";
@@ -313,13 +312,16 @@ void Sender::send_file(const char* host) {
             cout << "block sz " << std::to_string(block_sz) << " duration " << std::to_string(duration) << std::endl;
             if(duration > timeout)
                 timed_out = true;
-            if(timed_out || errno == ETIMEDOUT || errno == EWOULDBLOCK || block_sz < 0) {
+            if(timed_out || errno == ETIMEDOUT || block_sz < 0) {
                 std::cout << "time out/error occurred on read " << to_string(errno) << "\n";
+                cout << strerror(errno) << "\n";
                 bzero(res_buf, length);
+                timed_out = false;
                 continue;
             }
             //add_nulls(res_buf);
             is_ack = read_response(segment.seq_num, res_buf);
+            cout << "is ack " << is_ack << "\n\n";
             bzero(res_buf, length);
         }
         establish = false;

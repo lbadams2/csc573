@@ -61,6 +61,11 @@ umap Receiver::read_segment(vector<unsigned char>& segment, ssize_t num_bytes, b
         map["in_order"] = "true";
         next_seq_num += mss;
     }
+    else if(seq_num == (next_seq_num - mss + num_bytes)) {
+        map["in_order"] = "true";
+        cout << "Last packet\n";
+        next_seq_num = seq_num + mss;
+    }
     else {
         map["in_order"] = "false";
         return map;
@@ -76,6 +81,7 @@ umap Receiver::read_segment(vector<unsigned char>& segment, ssize_t num_bytes, b
             all[i] = bits[i % 8];
         mss = bitArrayToInt32(all, 16);
         cout << "mss is " <<  to_string(mss) << "\n";
+        next_seq_num = 0;
     }
     else {
         string data_str;
@@ -132,8 +138,13 @@ bool Receiver::validate_checksum(vector<unsigned char>& segment, ssize_t num_byt
 vector<unsigned char> Receiver::get_ack() {
     // convert seq num to bool
     bool snb[32] = {false};
-    int  i = 0;
-    uint16_t ns = next_seq_num;
+    int i = 0;
+    unsigned int ns = 0;
+    if(next_seq_num == 0)
+        ns = next_seq_num;
+    else
+        ns = next_seq_num - mss;
+    cout << "seq num in ack " << to_string(ns) << "\n";
     while(ns) {
         if (ns&1)
             snb[i] = 1;
@@ -173,7 +184,7 @@ void Receiver::remove_nulls(vector<unsigned char>& v) {
 }
 
 void Receiver::download_file() {
-    int server_fd, new_socket;
+    int server_fd;
     struct sockaddr_in serv_addr, cli_addr;
     int segment_size = 20;
     umap seg_map;
@@ -205,23 +216,22 @@ void Receiver::download_file() {
     }
     //unsigned char* buffer = bvec.data();
     vector<unsigned char> bvec(segment_size);
+    unsigned char* buffer = bvec.data();
     bool is_resized = false;
+    bool first = true;
     while(true) {
-        cout << "about to recvfrom\n";        
-        if(is_resized) {
-            bvec.resize(segment_size);
-            is_resized = false;
-        }
-        bvec.clear();
-        unsigned char* buffer = bvec.data();
+        cout << "about to recvfrom\n";
         //unsigned char buffer[segment_size] = {0};
         //bzero(buffer, segment_size);
         while((block_sz = recvfrom(server_fd, buffer, segment_size, 0, ( struct sockaddr *) &cli_addr, &len)) > 0) {
-            //cout << "Received data - bytes " << std::to_string(block_sz) << "\n";
-            printf("Data: %.*s \nReceived from %s:%d\n\n", block_sz, buffer, inet_ntoa(cli_addr.sin_addr), ntohs(cli_addr.sin_port));
+            cout << "Received data - bytes " << std::to_string(block_sz) << "\n";
+            printf("Received from %s:%d\n", inet_ntoa(cli_addr.sin_addr), ntohs(cli_addr.sin_port));
             double rand_val = dis(gen);
-            if(rand_val <= loss_prob)
+            if(rand_val <= loss_prob || first) {
+                first = false;
+                cout << "Lost packet\n";
                 continue;
+            }
             //string segment(buffer);
             if(is_set_mss) {
                 seg_map = read_segment(bvec, block_sz, true);
@@ -231,7 +241,7 @@ void Receiver::download_file() {
                     //buffer[segment_size] = {0};
                     //bvec.clear();
                     //bvec.resize(segment_size);
-                    //buffer = bvec.data(); 
+                    //buffer = bvec.data();
                 }
                 //is_set_mss = false;
             }
@@ -251,9 +261,8 @@ void Receiver::download_file() {
                 vector<unsigned char> ack = get_ack();
                 //remove_nulls(ack);
                 unsigned char* ack_bytes = ack.data();
-                cout << "about to send ack size " << ack.size() << "\n";
-                ssize_t val = sendto(server_fd, ack_bytes, 8, 0, (const struct sockaddr *) &cli_addr, len);
-                cout << "sent ack " << to_string(val) << "\n";
+                cout << "about to send ack\n";
+                sendto(server_fd, ack_bytes, 8, 0, (const struct sockaddr *) &cli_addr, len);
                 //send(new_socket, ack, 8, 0);
                 is_set_mss = false;
             }
@@ -270,6 +279,13 @@ void Receiver::download_file() {
                 sendto(server_fd, ack_bytes, 8, 0, (const struct sockaddr *) &cli_addr, len);
                 //send(new_socket, ack, 8, 0);
             }
+            if(is_resized) {
+                bvec.resize(segment_size);
+                is_resized = false;
+            }
+            bvec.clear();
+            buffer = bvec.data();
+            cout << "\n";
         }
         cout << "out of inner while\n";
     }
