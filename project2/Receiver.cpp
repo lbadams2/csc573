@@ -197,7 +197,7 @@ void Receiver::download_file() {
     // bind socket to port
     //bzero(buffer, segment_size);
     ssize_t block_sz = 0;
-    unsigned int len = 0;
+    unsigned int len = sizeof cli_addr;
     bool is_set_mss = true;
     if(bind(server_fd, (struct sockaddr *) &serv_addr, sizeof(serv_addr)) < 0) {
         perror("bind failed");
@@ -217,7 +217,8 @@ void Receiver::download_file() {
         //unsigned char buffer[segment_size] = {0};
         //bzero(buffer, segment_size);
         while((block_sz = recvfrom(server_fd, buffer, segment_size, 0, ( struct sockaddr *) &cli_addr, &len)) > 0) {
-            cout << "Received data - bytes " << std::to_string(block_sz) << "\n";
+            //cout << "Received data - bytes " << std::to_string(block_sz) << "\n";
+            printf("Data: %.*s \nReceived from %s:%d\n\n", block_sz, buffer, inet_ntoa(cli_addr.sin_addr), ntohs(cli_addr.sin_port));
             double rand_val = dis(gen);
             if(rand_val <= loss_prob)
                 continue;
