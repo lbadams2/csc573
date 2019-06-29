@@ -15,6 +15,7 @@
 #include <thread>
 #include <condition_variable>
 #include <bitset>
+#include <algorithm>
 
 #define RECEIVER_PORT 7735
 using std::string;

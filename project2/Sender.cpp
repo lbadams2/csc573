@@ -14,7 +14,7 @@ void Segment::init_type() {
     type[1] = t;
 }
 
-Sender::Sender(std::vector<string> theHosts, const uint16_t thePort, const string name, const uint16_t theMss, const long theTimeout) : hosts(theHosts), port(thePort), file_name(name), mss(theMss), timeout(theTimeout) {
+Sender::Sender(std::vector<string> theHosts, const uint16_t thePort, const string name, const uint16_t theMss, const long theTimeout) : hosts(theHosts), port(thePort), file_name(name), mss(theMss), timeout(theTimeout), current_iteration(0) {
     std::ifstream infile(file_name, std::ios_base::binary);
     this->buffer = std::vector<unsigned char>(std::istreambuf_iterator<char>(infile), std::istreambuf_iterator<char>());
 }
@@ -83,7 +83,7 @@ vector<unsigned char> Segment::to_bytes(bool mss_segment, uint16_t mss) {
     unsigned char seg_byte;
     int byte_num = 0;
     for(int i = 0; i < 32; i++) {
-        bool_byte[i] = snb[i];
+        bool_byte[i % 8] = snb[i];
         if(i % 8 == 7) {
             seg_byte = to_byte(bool_byte);
             //if(seg_byte == '\0')
@@ -179,7 +179,7 @@ vector<unsigned char> Segment::to_bytes(bool mss_segment, uint16_t mss) {
     all.reserve(header.size() + data.size());
     all.insert(all.end(), header.begin(), header.end());
     all.insert(all.end(), data.begin(), data.end());
-    remove_nulls(all, mss_segment);
+    //remove_nulls(all, mss_segment);
     return all;
 }
 
@@ -219,6 +219,7 @@ bool Sender::read_response(unsigned int seq_num, unsigned char* response) {
 }
 
 void Sender::send_file(const char* host) {
+    cout << "in send file\n";
     int sock = 0;
     struct sockaddr_in serv_addr;
     size_t length = 8;
@@ -245,13 +246,16 @@ void Sender::send_file(const char* host) {
      */
     
     size_t file_size = buffer.size();
+    cout << "file size " << to_string(file_size) << "\n";
     size_t file_pos = 0;
     int next_iteration = 1;
     bool establish = true;
     while(file_pos < file_size - 1) {
+        cout << "waiting for lock\n";
         std::unique_lock<std::mutex> lock(mrun);
         main_ready.wait(lock, [&next_iteration, this]{return next_iteration == current_iteration; });
         lock.unlock();
+        cout << "acquired lock\n";
         ++next_iteration;
         Segment segment;
         vector<unsigned char> req_str;
@@ -314,7 +318,7 @@ void Sender::send_file(const char* host) {
                 bzero(res_buf, length);
                 continue;
             }
-            add_nulls(res_buf);
+            //add_nulls(res_buf);
             is_ack = read_response(segment.seq_num, res_buf);
             bzero(res_buf, length);
         }

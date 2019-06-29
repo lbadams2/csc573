@@ -11,6 +11,8 @@
 #include <fstream>
 #include <random>
 #include <bitset>
+#include <algorithm>
+#include <cstring>
 
 #define PORT 7735
 #define VALID_CHECKSUM 65535
@@ -31,11 +33,11 @@ struct ACK_Segment {
 class Receiver {
 public:
     Receiver(string file_name, double loss_prob);
-    umap read_segment(unsigned char* segment, ssize_t num_bytes, bool is_set_mss);
+    umap read_segment(vector<unsigned char>& segment, ssize_t num_bytes, bool is_set_mss);
     void download_file();
     vector<unsigned char> get_ack();
 private:
-    bool validate_checksum(unsigned char* segment, ssize_t num_bytes);
+    bool validate_checksum(vector<unsigned char>& segment, ssize_t num_bytes);
     void add_nulls(unsigned char* segment, bool is_set_mss);
     void remove_nulls(vector<unsigned char>& v);
     string file_contents;
