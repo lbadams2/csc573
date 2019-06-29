@@ -331,6 +331,7 @@ void Sender::send_file(const char* host) {
             iteration_complete.notify_one();
         }
     }
+    cout << "Out of while loop\n";
     close(sock);
     files_sent.push_back(1);
 }

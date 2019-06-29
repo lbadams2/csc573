@@ -42,7 +42,7 @@ private:
     void remove_nulls(vector<unsigned char>& v);
     string file_contents;
     string file_name;
-    uint16_t next_seq_num;
+    unsigned int next_seq_num;
     uint16_t mss;
     double loss_prob;
 };

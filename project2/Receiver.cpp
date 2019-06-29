@@ -56,17 +56,18 @@ umap Receiver::read_segment(vector<unsigned char>& segment, ssize_t num_bytes, b
             bits[j] = bset[j % 8];
     }
     unsigned int seq_num = bitArrayToInt32(bits, 32);
-    cout << "Received seq num " << std::to_string(seq_num) << "\n";
+    cout << "Received seq num " << std::to_string(seq_num) << "\n";    
     if(seq_num == next_seq_num) {
         map["in_order"] = "true";
         next_seq_num += mss;
     }
-    else if(seq_num == (next_seq_num - mss + num_bytes)) {
+    else if(seq_num == (next_seq_num - mss + num_bytes - HEADER_SIZE)) {
         map["in_order"] = "true";
         cout << "Last packet\n";
         next_seq_num = seq_num + mss;
     }
     else {
+        cout << "Next seq num " << to_string(next_seq_num) << "\n";
         map["in_order"] = "false";
         return map;
     }
