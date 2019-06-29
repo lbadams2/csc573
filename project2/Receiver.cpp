@@ -219,7 +219,6 @@ void Receiver::download_file() {
     vector<unsigned char> bvec(segment_size);
     unsigned char* buffer = bvec.data();
     bool is_resized = false;
-    bool first = true;
     while(true) {
         cout << "about to recvfrom\n";
         //unsigned char buffer[segment_size] = {0};
@@ -228,8 +227,7 @@ void Receiver::download_file() {
             cout << "Received data - bytes " << std::to_string(block_sz) << "\n";
             printf("Received from %s:%d\n", inet_ntoa(cli_addr.sin_addr), ntohs(cli_addr.sin_port));
             double rand_val = dis(gen);
-            if(rand_val <= loss_prob || first) {
-                first = false;
+            if(rand_val <= loss_prob) {
                 cout << "Lost packet\n";
                 continue;
             }
