@@ -235,10 +235,10 @@ void Receiver::download_file() {
             cout << "Received data - bytes " << std::to_string(block_sz) << "\n";
             printf("Received from %s:%d\n", inet_ntoa(cli_addr.sin_addr), ntohs(cli_addr.sin_port));
             double rand_val = dis(gen);
-          //  if(rand_val <= loss_prob) {
-          //      cout << "Lost packet\n";
-          //      continue;
-          //  }
+            if(rand_val <= loss_prob) {
+                cout << "Lost packet\n";
+                continue;
+            }
             //string segment(buffer);
             if(is_set_mss) {
                 seg_map = read_segment(bvec, block_sz, true);
