@@ -206,6 +206,10 @@ void Receiver::download_file() {
     serv_addr.sin_addr.s_addr = INADDR_ANY;
     serv_addr.sin_port = htons(PORT);
     
+    // struct timeval tv;
+    //tv.tv_sec = 2;
+    //tv.tv_usec = 0;
+    //setsockopt(server_fd, SOL_SOCKET, SO_RCVTIMEO, (const char*)&tv, sizeof tv); 
     // bind socket to port
     //bzero(buffer, segment_size);
     ssize_t block_sz = 0;
@@ -223,14 +227,18 @@ void Receiver::download_file() {
         cout << "about to recvfrom\n";
         //unsigned char buffer[segment_size] = {0};
         //bzero(buffer, segment_size);
-        while((block_sz = recvfrom(server_fd, buffer, segment_size, 0, ( struct sockaddr *) &cli_addr, &len)) > 0) {
+        printf("Receiving from %s:%d\n", inet_ntoa(cli_addr.sin_addr), ntohs(cli_addr.sin_port));
+	cout << "segment size " << to_string(segment_size) << " len " << to_string(len) << "\n";
+        block_sz = recvfrom(server_fd, buffer, segment_size, 0, ( struct sockaddr *) &cli_addr, &len);
+	cout << "block size " << to_string(block_sz) << "errno " << to_string(errno) << " " << strerror(errno) << "\n";
+        if(block_sz > 0) {
             cout << "Received data - bytes " << std::to_string(block_sz) << "\n";
             printf("Received from %s:%d\n", inet_ntoa(cli_addr.sin_addr), ntohs(cli_addr.sin_port));
             double rand_val = dis(gen);
-            if(rand_val <= loss_prob) {
-                cout << "Lost packet\n";
-                continue;
-            }
+          //  if(rand_val <= loss_prob) {
+          //      cout << "Lost packet\n";
+          //      continue;
+          //  }
             //string segment(buffer);
             if(is_set_mss) {
                 seg_map = read_segment(bvec, block_sz, true);
@@ -272,6 +280,7 @@ void Receiver::download_file() {
                     out.open(file_name, std::ios_base::app);
                     out << data;
                     out.close();
+		    cout << "Done writing file chunk\n";
                 }
                 vector<unsigned char> ack = get_ack();
                 unsigned char* ack_bytes = ack.data();
@@ -284,7 +293,7 @@ void Receiver::download_file() {
             }
             bvec.clear();
             buffer = bvec.data();
-            cout << "\n";
+	    cout << "Cleared buffer\n\n";
         }
         cout << "out of inner while\n";
     }
