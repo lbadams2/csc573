@@ -237,7 +237,7 @@ void Sender::send_file(const char* host) {
     memset(&serv_addr, '0', sizeof(serv_addr));
     serv_addr.sin_family = AF_INET;
     serv_addr.sin_port = htons(port);
-    serv_addr.sin_addr.s_addr = INADDR_ANY;
+    serv_addr.sin_addr.s_addr = inet_addr(host);
     /*
      if(inet_pton(AF_INET, host, &serv_addr.sin_addr) <= 0) {
      std::cout << "\nInvalid address/ Address not supported \n";
@@ -285,7 +285,7 @@ void Sender::send_file(const char* host) {
         long duration = 0;
         unsigned char* req = req_str.data();
         size_t num_bytes = req_str.size();
-        unsigned int len = 0;
+        unsigned int len = sizeof serv_addr;
         while(!is_ack) {
             /*
              if(connect(sock, (struct sockaddr *) &serv_addr, sizeof(serv_addr)) < 0) {
@@ -296,9 +296,11 @@ void Sender::send_file(const char* host) {
             //vector<unsigned char> req_str = segment.to_bytes();
             //validate_checksum(req, req_str.size());
             cout << "about to send data " << std::to_string(segment.seq_num) << " bytes " << std::to_string(num_bytes) << "\n";
-            sendto(sock, req, num_bytes, 0, (const struct sockaddr *) &serv_addr, sizeof(serv_addr));
+            ssize_t send_res = sendto(sock, req, num_bytes, 0, (const struct sockaddr *) &serv_addr, sizeof(serv_addr));
+            printf("Sent to %s:%d\n", inet_ntoa(serv_addr.sin_addr), ntohs(serv_addr.sin_port));
+            cout << "send res " << to_string(send_res) << " " << strerror(errno) << "\n";
             //send(sock, req, num_bytes, 0);
-            cout << "sent data\n";
+            //cout << "sent data\n";
             start_time = std::chrono::high_resolution_clock::now();
             bzero(res_buf, length);
             cout << "about to read ack\n";
@@ -310,7 +312,7 @@ void Sender::send_file(const char* host) {
             end_time = std::chrono::high_resolution_clock::now();
             duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time).count();
             cout << "block sz " << std::to_string(block_sz) << " duration " << std::to_string(duration) << std::endl;
-            if(duration > timeout)
+            if(duration > timeout * 1000)
                 timed_out = true;
             if(timed_out || errno == ETIMEDOUT || block_sz < 0) {
                 std::cout << "time out/error occurred on read " << to_string(errno) << "\n";
@@ -323,6 +325,11 @@ void Sender::send_file(const char* host) {
             is_ack = read_response(segment.seq_num, res_buf);
             cout << "is ack " << is_ack << "\n\n";
             bzero(res_buf, length);
+            close(sock);
+            if((sock = socket(AF_INET, SOCK_DGRAM, 0)) == 0) {
+                perror("socket failed");
+                exit(EXIT_FAILURE);
+            }
         }
         establish = false;
         lock.lock();
