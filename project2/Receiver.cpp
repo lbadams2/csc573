@@ -229,7 +229,7 @@ void Receiver::download_file() {
         //bzero(buffer, segment_size);
         printf("Receiving from %s:%d\n", inet_ntoa(cli_addr.sin_addr), ntohs(cli_addr.sin_port));
 	    //cout << "segment size " << to_string(segment_size) << " len " << to_string(len) << "\n";
-        //block_sz = recvfrom(server_fd, buffer, segment_size, 0, ( struct sockaddr *) &cli_addr, &len);
+        block_sz = recvfrom(server_fd, buffer, segment_size, 0, ( struct sockaddr *) &cli_addr, &len);
 	    cout << "block size " << to_string(block_sz) << "errno " << to_string(errno) << " " << strerror(errno) << "\n";
         if(block_sz > 0) {
             cout << "Received data - bytes " << std::to_string(block_sz) << "\n";
