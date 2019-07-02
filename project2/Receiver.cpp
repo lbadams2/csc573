@@ -81,7 +81,7 @@ umap Receiver::read_segment(vector<unsigned char>& segment, ssize_t num_bytes, b
         for(int i = 8; i < 16; i++)
             all[i] = bits[i % 8];
         mss = bitArrayToInt32(all, 16);
-        cout << "mss is " <<  to_string(mss) << "\n";
+        //cout << "mss is " <<  to_string(mss) << "\n";
         next_seq_num = 0;
     }
     else {
@@ -105,7 +105,7 @@ bool Receiver::validate_checksum(vector<unsigned char>& segment, ssize_t num_byt
     for(int i = 8; i < 16; i++)
         all[i] = bits[i % 8];
     uint16_t checksum = bitArrayToInt32(all, 16);
-    cout << "checksum " << to_string(checksum) << "\n";
+    //cout << "checksum " << to_string(checksum) << "\n";
     uint16_t concat = 0;
     uint16_t sum = 0;
     for(int i = 0; i < 4; i += 2) {
@@ -116,12 +116,12 @@ bool Receiver::validate_checksum(vector<unsigned char>& segment, ssize_t num_byt
         concat = concat | segment[i + 1];
         sum += concat;
     }
-    cout << "seg sum " << to_string(sum) << "\n";
+    //cout << "seg sum " << to_string(sum) << "\n";
     concat = segment[6];
     concat = concat << 8;
     concat = concat | segment[7];
     sum += concat;
-    cout << "sum with type " << to_string(sum) << "\n";
+    //cout << "sum with type " << to_string(sum) << "\n";
     for(int i = 8; i < num_bytes; i++) {
         concat = segment[i];
         if( ++i == num_bytes)
@@ -130,9 +130,9 @@ bool Receiver::validate_checksum(vector<unsigned char>& segment, ssize_t num_byt
             concat = (concat << 8) | segment[i];
         sum += concat;
     }
-    cout << "sum with data " << to_string(sum) << "\n";
+    //cout << "sum with data " << to_string(sum) << "\n";
     uint16_t val = sum + checksum;
-    cout << "Sum plus checksum " << std::to_string(val) << "\n";
+    //cout << "Sum plus checksum " << std::to_string(val) << "\n";
     return val == VALID_CHECKSUM;
 }
 
@@ -224,13 +224,13 @@ void Receiver::download_file() {
     unsigned char* buffer = bvec.data();
     bool is_resized = false;
     while(true) {
-        cout << "about to recvfrom\n";
+        //cout << "about to recvfrom\n";
         //unsigned char buffer[segment_size] = {0};
         //bzero(buffer, segment_size);
         printf("Receiving from %s:%d\n", inet_ntoa(cli_addr.sin_addr), ntohs(cli_addr.sin_port));
-	cout << "segment size " << to_string(segment_size) << " len " << to_string(len) << "\n";
-        block_sz = recvfrom(server_fd, buffer, segment_size, 0, ( struct sockaddr *) &cli_addr, &len);
-	cout << "block size " << to_string(block_sz) << "errno " << to_string(errno) << " " << strerror(errno) << "\n";
+	    //cout << "segment size " << to_string(segment_size) << " len " << to_string(len) << "\n";
+        //block_sz = recvfrom(server_fd, buffer, segment_size, 0, ( struct sockaddr *) &cli_addr, &len);
+	    cout << "block size " << to_string(block_sz) << "errno " << to_string(errno) << " " << strerror(errno) << "\n";
         if(block_sz > 0) {
             cout << "Received data - bytes " << std::to_string(block_sz) << "\n";
             printf("Received from %s:%d\n", inet_ntoa(cli_addr.sin_addr), ntohs(cli_addr.sin_port));
@@ -268,7 +268,7 @@ void Receiver::download_file() {
                 vector<unsigned char> ack = get_ack();
                 //remove_nulls(ack);
                 unsigned char* ack_bytes = ack.data();
-                cout << "about to send ack\n";
+                cout << "about to send ack\n\n";
                 sendto(server_fd, ack_bytes, 8, 0, (const struct sockaddr *) &cli_addr, len);
                 //send(new_socket, ack, 8, 0);
                 is_set_mss = false;
@@ -280,7 +280,7 @@ void Receiver::download_file() {
                     out.open(file_name, std::ios_base::app);
                     out << data;
                     out.close();
-		    cout << "Done writing file chunk\n";
+		            cout << "Done writing file chunk\n\n";
                 }
                 vector<unsigned char> ack = get_ack();
                 unsigned char* ack_bytes = ack.data();
@@ -293,7 +293,7 @@ void Receiver::download_file() {
             }
             bvec.clear();
             buffer = bvec.data();
-	    cout << "Cleared buffer\n\n";
+	        //cout << "Cleared buffer\n\n";
         }
         cout << "out of inner while\n";
     }
