@@ -236,7 +236,7 @@ void Receiver::download_file() {
             printf("Received from %s:%d\n", inet_ntoa(cli_addr.sin_addr), ntohs(cli_addr.sin_port));
             double rand_val = dis(gen);
             if(rand_val <= loss_prob) {
-                cout << "Lost packet\n";
+                cout << "Packet loss, sequence number = "<< to_string(next_seq_num) << "\n";
                 continue;
             }
             //string segment(buffer);

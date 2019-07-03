@@ -14,9 +14,10 @@
 #include <condition_variable>
 #include <bitset>
 #include <algorithm>
+#include <cmath>
 
-#define RECEIVER_PORT 7735
-#define TIMEOUT 80000
+//#define RECEIVER_PORT 7735
+//#define TIMEOUT 80000
 using std::string;
 using std::cout;
 using std::vector;
@@ -30,6 +31,7 @@ std::condition_variable iteration_complete;
 int mss = 0;
 int worker_count = 0;
 vector<int> files_sent;
+int port = 0;
 
 static inline int bitArrayToInt32(bool arr[], int count)
 {
@@ -185,7 +187,7 @@ vector<unsigned char> Segment::to_bytes(bool mss_segment, uint16_t mss) {
     }
     
     vector<unsigned char> all;
-    cout << "header size " << std::to_string(header.size()) << " data size " << std::to_string(data.size()) << "\n";
+    //cout << "header size " << std::to_string(header.size()) << " data size " << std::to_string(data.size()) << "\n";
     all.reserve(header.size() + data.size());
     all.insert(all.end(), header.begin(), header.end());
     all.insert(all.end(), data.begin(), data.end());
@@ -205,25 +207,32 @@ bool read_response(unsigned int seq_num, unsigned char* response) {
     return ans == seq_num;
 }
 
+void set_timeout(long sample_rtt) {
+    
+}
+
 void send_file(const char* host) {
     //cout << host << " in send file\n";
     int sock = 0;
     struct sockaddr_in serv_addr;
     size_t length = 8;
     unsigned char res_buf[8] = {0};
+    int estimated_rtt = 0;
+    int dev_rtt = 0;
+    int timeout = 1000000; // microseconds
     if((sock = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
         std::cout << "\n Socket creation error \n";
         exit(EXIT_FAILURE);
     }
     struct timeval tv;
     tv.tv_sec = 0;
-    tv.tv_usec = TIMEOUT;
+    tv.tv_usec = timeout;
     setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, (const char*)&tv, sizeof tv);
     
     // copy 0 into serv_addr members
     memset(&serv_addr, '0', sizeof(serv_addr));
     serv_addr.sin_family = AF_INET;
-    serv_addr.sin_port = htons(RECEIVER_PORT);
+    serv_addr.sin_port = htons(port);
     serv_addr.sin_addr.s_addr = inet_addr(host);
     /*
      if(inet_pton(AF_INET, host, &serv_addr.sin_addr) <= 0) {
@@ -239,10 +248,10 @@ void send_file(const char* host) {
     bool establish = true;
     //std::unique_lock<std::mutex> lock(mrun);
     while(file_pos < file_size - 1) {
-        cout << host << " waiting for lock\n";
+        //cout << host << " waiting for lock\n";
         std::unique_lock<std::mutex> lock(mrun);
         main_ready.wait(lock, [&next_iteration]{return next_iteration == current_iteration; });
-        cout << host << " acquired lock\n";
+        //cout << host << " acquired lock\n";
         lock.unlock();
         ++next_iteration;
         Segment segment;
@@ -274,6 +283,7 @@ void send_file(const char* host) {
         unsigned char* req = req_str.data();
         size_t num_bytes = req_str.size();
         unsigned int len = sizeof serv_addr;
+        int consec_timeouts = 0;
         while(!is_ack) {
             /*
              if(connect(sock, (struct sockaddr *) &serv_addr, sizeof(serv_addr)) < 0) {
@@ -285,33 +295,52 @@ void send_file(const char* host) {
             //validate_checksum(req, req_str.size());
             //cout << host << " about to send data " << std::to_string(segment.seq_num) << " bytes " << std::to_string(num_bytes) << "\n";
             ssize_t send_res = sendto(sock, req, num_bytes, 0, (const struct sockaddr *) &serv_addr, sizeof(serv_addr));
-            printf("Sent to %s:%d\n", inet_ntoa(serv_addr.sin_addr), ntohs(serv_addr.sin_port));
+            //printf("Sent to %s:%d\n", inet_ntoa(serv_addr.sin_addr), ntohs(serv_addr.sin_port));
             //cout << host << " send res " << to_string(send_res) << " " << strerror(errno) << "\n";
             //send(sock, req, num_bytes, 0);
             //cout << "sent data\n";
-            start_time = std::chrono::high_resolution_clock::now();
+            
             bzero(res_buf, length);
-            cout << host << " about to read ack\n";
+            //cout << host << " about to read ack\n";
+            start_time = std::chrono::high_resolution_clock::now();
             ssize_t block_sz = recvfrom(sock, res_buf, length, 0, (struct sockaddr *) &serv_addr, &len);
             //ssize_t block_sz = read(sock, res_buf, length);
-            cout << host << " read ack\n";
+            //cout << host << " read ack\n";
             //if(block_sz == 0 || block_sz != length)
             //    break;
             end_time = std::chrono::high_resolution_clock::now();
-            duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time).count();
-            cout << host << " block sz " << std::to_string(block_sz) << " duration " << std::to_string(duration) << std::endl;
-            if(duration > TIMEOUT / 1000)
+            duration = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time).count();
+            estimated_rtt = (.875 * estimated_rtt) + (.125 * duration);
+            dev_rtt = (.75 * dev_rtt) + (.25 * std::abs(duration - estimated_rtt));
+            timeout = estimated_rtt + 4 * dev_rtt;
+            //cout << "new timeout is " << to_string(timeout) << "\n";
+            //cout << host << " block sz " << std::to_string(block_sz) << " duration " << std::to_string(duration) << std::endl;
+            if(duration > timeout)
                 timed_out = true;
             if(timed_out || errno == ETIMEDOUT || block_sz < 0) {
-                std::cout << "time out/error occurred on read " << to_string(errno) << "\n";
-                cout << strerror(errno) << "\n";
+                //std::cout << "time out/error occurred on read " << to_string(errno) << "\n";
+                //cout << strerror(errno) << "\n";
+                cout << "Timeout, sequence number = " << to_string(segment.seq_num) << "\n";
                 bzero(res_buf, length);
                 timed_out = false;
+                consec_timeouts++;
+                if(consec_timeouts > 2) {
+                    close(sock);
+                    if((sock = socket(AF_INET, SOCK_DGRAM, 0)) == 0) {
+                        perror("socket failed");
+                        exit(EXIT_FAILURE);
+                    }
+                    consec_timeouts = 0;
+                }
+                timeout = timeout * 2;
+                tv.tv_sec = 0;
+                tv.tv_usec = timeout;
+                setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, (const char*)&tv, sizeof tv);
                 continue;
             }
             //add_nulls(res_buf);
             is_ack = read_response(segment.seq_num, res_buf);
-            cout << host << " is ack " << is_ack << "\n\n";
+            //cout << host << " is ack " << is_ack << "\n\n";
             bzero(res_buf, length);
             close(sock);
             if((sock = socket(AF_INET, SOCK_DGRAM, 0)) == 0) {
@@ -319,7 +348,7 @@ void send_file(const char* host) {
                 exit(EXIT_FAILURE);
             }
             tv.tv_sec = 0;
-            tv.tv_usec = TIMEOUT;
+            tv.tv_usec = timeout;
             setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, (const char*)&tv, sizeof tv);
         }
         establish = false;
@@ -331,10 +360,10 @@ void send_file(const char* host) {
         //lock.unlock();
     }
     close(sock);
-    cout << host << " Out of while loop\n";
+    //cout << host << " Out of while loop\n";
     std::unique_lock<std::mutex> lock(mrun);
     main_ready.wait(lock, [&next_iteration]{return next_iteration == current_iteration; });
-    cout << host << " acquired lock\n";
+    //cout << host << " acquired lock\n";
     files_sent.push_back(1);
     if(--worker_count == 0) {
         lock.unlock();
@@ -348,7 +377,7 @@ void send_file(const char* host) {
 int main(int argc, char** argv) {
     mss = atoi(argv[argc-1]);
     std::string file_name = argv[argc-2];
-    int port = atoi(argv[argc-3]);
+    port = atoi(argv[argc-3]);
     std::vector<std::string> hosts;
     for(int i = 1; i < argc-3; i++)
         hosts.push_back(argv[i]);
@@ -386,8 +415,8 @@ int main(int argc, char** argv) {
     end_time = std::chrono::high_resolution_clock::now();
     long duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time).count();
     double secs = duration/(double)1000;
-    cout << "elapsed time for all uploads " << to_string(secs) << "\n";
-    cout << "out of main while loop\n";
+    //cout << "elapsed time for all uploads " << to_string(secs) << "\n";
+    //cout << "out of main while loop\n";
     for(auto& t: threads) {
         t.join();
         //delete t;
