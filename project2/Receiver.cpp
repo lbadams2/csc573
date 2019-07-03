@@ -56,18 +56,18 @@ umap Receiver::read_segment(vector<unsigned char>& segment, ssize_t num_bytes, b
             bits[j] = bset[j % 8];
     }
     unsigned int seq_num = bitArrayToInt32(bits, 32);
-    cout << "Received seq num " << std::to_string(seq_num) << "\n";    
+    //cout << "Received seq num " << std::to_string(seq_num) << "\n";    
     if(seq_num == next_seq_num) {
         map["in_order"] = "true";
         next_seq_num += mss;
     }
     else if(seq_num == (next_seq_num - mss + num_bytes - HEADER_SIZE)) {
         map["in_order"] = "true";
-        cout << "Last packet\n";
+        //cout << "Last packet\n";
         next_seq_num = seq_num + mss;
     }
     else {
-        cout << "Next seq num " << to_string(next_seq_num) << "\n";
+        //cout << "Next seq num " << to_string(next_seq_num) << "\n";
         map["in_order"] = "false";
         return map;
     }
@@ -145,7 +145,7 @@ vector<unsigned char> Receiver::get_ack() {
         ns = next_seq_num;
     else
         ns = next_seq_num - mss;
-    cout << "seq num in ack " << to_string(ns) << "\n";
+    //cout << "seq num in ack " << to_string(ns) << "\n";
     while(ns) {
         if (ns&1)
             snb[i] = 1;
@@ -230,10 +230,10 @@ void Receiver::download_file() {
         printf("Receiving from %s:%d\n", inet_ntoa(cli_addr.sin_addr), ntohs(cli_addr.sin_port));
 	    //cout << "segment size " << to_string(segment_size) << " len " << to_string(len) << "\n";
         block_sz = recvfrom(server_fd, buffer, segment_size, 0, ( struct sockaddr *) &cli_addr, &len);
-	    cout << "block size " << to_string(block_sz) << "errno " << to_string(errno) << " " << strerror(errno) << "\n";
+	    //cout << "block size " << to_string(block_sz) << "errno " << to_string(errno) << " " << strerror(errno) << "\n";
         if(block_sz > 0) {
-            cout << "Received data - bytes " << std::to_string(block_sz) << "\n";
-            printf("Received from %s:%d\n", inet_ntoa(cli_addr.sin_addr), ntohs(cli_addr.sin_port));
+            //cout << "Received data - bytes " << std::to_string(block_sz) << "\n";
+            //printf("Received from %s:%d\n", inet_ntoa(cli_addr.sin_addr), ntohs(cli_addr.sin_port));
             double rand_val = dis(gen);
             if(rand_val <= loss_prob) {
                 cout << "Packet loss, sequence number = "<< to_string(next_seq_num) << "\n";
@@ -254,7 +254,7 @@ void Receiver::download_file() {
             }
             else {
                 if(block_sz == 0) {
-                    cout << "received no data\n";
+                    //cout << "received no data\n";
                     break;
                 }
                 seg_map = read_segment(bvec, block_sz, false);
@@ -268,7 +268,7 @@ void Receiver::download_file() {
                 vector<unsigned char> ack = get_ack();
                 //remove_nulls(ack);
                 unsigned char* ack_bytes = ack.data();
-                cout << "about to send ack\n\n";
+                //cout << "about to send ack\n\n";
                 sendto(server_fd, ack_bytes, 8, 0, (const struct sockaddr *) &cli_addr, len);
                 //send(new_socket, ack, 8, 0);
                 is_set_mss = false;
@@ -280,7 +280,7 @@ void Receiver::download_file() {
                     out.open(file_name, std::ios_base::app);
                     out << data;
                     out.close();
-		            cout << "Done writing file chunk\n\n";
+		            //cout << "Done writing file chunk\n\n";
                 }
                 vector<unsigned char> ack = get_ack();
                 unsigned char* ack_bytes = ack.data();
@@ -295,6 +295,6 @@ void Receiver::download_file() {
             buffer = bvec.data();
 	        //cout << "Cleared buffer\n\n";
         }
-        cout << "out of inner while\n";
+        //cout << "out of inner while\n";
     }
 }

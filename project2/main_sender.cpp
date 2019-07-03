@@ -323,6 +323,7 @@ void send_file(const char* host) {
                 cout << "Timeout, sequence number = " << to_string(segment.seq_num) << "\n";
                 bzero(res_buf, length);
                 timed_out = false;
+                /*
                 consec_timeouts++;
                 if(consec_timeouts > 2) {
                     close(sock);
@@ -332,6 +333,7 @@ void send_file(const char* host) {
                     }
                     consec_timeouts = 0;
                 }
+                */
                 timeout = timeout * 2;
                 tv.tv_sec = 0;
                 tv.tv_usec = timeout;
@@ -342,11 +344,13 @@ void send_file(const char* host) {
             is_ack = read_response(segment.seq_num, res_buf);
             //cout << host << " is ack " << is_ack << "\n\n";
             bzero(res_buf, length);
+            /*
             close(sock);
             if((sock = socket(AF_INET, SOCK_DGRAM, 0)) == 0) {
                 perror("socket failed");
                 exit(EXIT_FAILURE);
             }
+            */
             tv.tv_sec = 0;
             tv.tv_usec = timeout;
             setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, (const char*)&tv, sizeof tv);
