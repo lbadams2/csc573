@@ -225,8 +225,8 @@ void send_file(const char* host) {
         exit(EXIT_FAILURE);
     }
     struct timeval tv;
-    tv.tv_sec = 0;
-    tv.tv_usec = timeout;
+    tv.tv_sec = 1;
+    tv.tv_usec = 0;
     setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, (const char*)&tv, sizeof tv);
     
     // copy 0 into serv_addr members
@@ -420,5 +420,5 @@ int main(int argc, char** argv) {
     for(auto& t: threads) {
         t.join();
         //delete t;
-    }    
+    }
 }
