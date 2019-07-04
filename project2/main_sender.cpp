@@ -319,7 +319,7 @@ void send_file(const char* host) {
             //    timed_out = true;
             if(errno == ETIMEDOUT || block_sz < 0) {
                 //std::cout << "time out/error occurred on read " << to_string(errno) << " " << strerror(errno) << "\n";
-                cout << "Timeout, sequence number = " << to_string(segment.seq_num) << " timeout " << to_string(timeout) << "\n";
+                cout << "Timeout, sequence number = " << to_string(segment.seq_num) << "\n";
                 bzero(res_buf, length);
                 timed_out = false;
                 
