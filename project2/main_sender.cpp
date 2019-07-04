@@ -334,6 +334,8 @@ void send_file(const char* host) {
                 }
                 
                 timeout = timeout * 2;
+                if(timeout > 950000)
+                    timeout = 950000;
                 tv.tv_sec = 0;
                 tv.tv_usec = timeout;
                 setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, (const char*)&tv, sizeof tv);
