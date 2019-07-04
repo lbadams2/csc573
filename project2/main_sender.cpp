@@ -216,7 +216,7 @@ void send_file(const char* host) {
     int sock = 0;
     struct sockaddr_in serv_addr;
     size_t length = 8;
-    unsigned char res_buf[8] = {0};
+    unsigned char res_buf[8];
     int estimated_rtt = 0;
     int dev_rtt = 0;
     int timeout = 1000000; // microseconds
@@ -315,15 +315,14 @@ void send_file(const char* host) {
             timeout = estimated_rtt + 4 * dev_rtt;
             //cout << "new timeout is " << to_string(timeout) << "\n";
             //cout << host << " block sz " << std::to_string(block_sz) << " duration " << std::to_string(duration) << std::endl;
-            if(duration > timeout)
-                timed_out = true;
-            if(timed_out || errno == ETIMEDOUT || block_sz < 0) {
-                //std::cout << "time out/error occurred on read " << to_string(errno) << "\n";
-                //cout << strerror(errno) << "\n";
-                cout << "Timeout, sequence number = " << to_string(segment.seq_num) << "\n";
+            //if(duration > timeout)
+            //    timed_out = true;
+            if(errno == ETIMEDOUT || block_sz < 0) {
+                //std::cout << "time out/error occurred on read " << to_string(errno) << " " << strerror(errno) << "\n";
+                cout << "Timeout, sequence number = " << to_string(segment.seq_num) << " timeout " << to_string(timeout) << "\n";
                 bzero(res_buf, length);
                 timed_out = false;
-                /*
+                
                 consec_timeouts++;
                 if(consec_timeouts > 2) {
                     close(sock);
@@ -333,7 +332,7 @@ void send_file(const char* host) {
                     }
                     consec_timeouts = 0;
                 }
-                */
+                
                 timeout = timeout * 2;
                 tv.tv_sec = 0;
                 tv.tv_usec = timeout;
@@ -342,15 +341,15 @@ void send_file(const char* host) {
             }
             //add_nulls(res_buf);
             is_ack = read_response(segment.seq_num, res_buf);
-            //cout << host << " is ack " << is_ack << "\n\n";
+            //cout << "is ack " << is_ack << " seq num " << to_string(segment.seq_num) << "\n\n";
             bzero(res_buf, length);
-            /*
+            
             close(sock);
             if((sock = socket(AF_INET, SOCK_DGRAM, 0)) == 0) {
                 perror("socket failed");
                 exit(EXIT_FAILURE);
             }
-            */
+            
             tv.tv_sec = 0;
             tv.tv_usec = timeout;
             setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, (const char*)&tv, sizeof tv);
